@@ -1,0 +1,8 @@
+# Swin-Large Backbone 配置 (供参考)
+# 当前由 configs/m3f_dino.yaml 中的 model.backbone 字段控制
+backbone:
+  name: swin_large
+  pretrained: true
+  out_indices: [0, 1, 2, 3]   # P2, P3, P4, P5
+  out_channels: [192, 384, 768, 1536]
+  drop_path_rate: 0.2           # 训练中使用 Stochastic Depth

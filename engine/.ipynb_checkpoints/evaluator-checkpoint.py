@@ -1,0 +1,212 @@
+"""Evaluator — 验证与评估。
+
+支持:
+    1. 模型推理验证
+    2. COCO-style mAP@50-95 计算
+    3. 预测结果 → COCO JSON 转换
+"""
+
+import json
+import os
+import torch
+from torch.cuda.amp import autocast
+
+#from ..models.detector.matcher import box_cxcywh_to_xyxy
+from models.detector.matcher import box_cxcywh_to_xyxy
+
+
+@torch.no_grad()
+def evaluate_model(model, loader, device, use_amp=True):
+    """模型推理验证。
+
+    Args:
+        model: M3F-DETR 模型（或 EMA 模型）
+        loader: 验证集 DataLoader
+        device: cuda / cpu
+        use_amp: 是否使用混合精度
+
+    Returns:
+        predictions: list of dict（COCO 格式预测）
+        targets: list of dict（COCO 格式标注）
+    """
+    model.eval()
+    predictions = []
+    targets = []
+
+    for batch in loader:
+        rgb = batch["rgb"].to(device, non_blocking=True)
+        ir = batch["ir"].to(device, non_blocking=True)
+        depth = batch["depth"].to(device, non_blocking=True)
+        batch_targets = batch["target"]
+
+        with autocast(enabled=use_amp):
+            output = model(rgb, ir, depth)
+
+        B = rgb.shape[0]
+        pred_logits = output["pred_logits"]  # (B, Q, C+1)
+        pred_boxes = output["pred_boxes"]    # (B, Q, 4)
+
+        for i in range(B):
+            image_id = batch_targets[i].get("image_id", torch.tensor([i])).item()
+            img_h, img_w = rgb.shape[2], rgb.shape[3]
+
+            # 预测: softmax → top-k → 过滤背景
+            scores = pred_logits[i].softmax(-1)  # (Q, C+1)
+            labels = scores.argmax(-1)            # (Q,)
+            confs = scores.max(-1).values         # (Q,)
+
+            # 过滤背景类（类别 == num_classes）
+            bg_mask = labels < (scores.shape[1] - 1)
+            confs = confs[bg_mask]
+            labels = labels[bg_mask]
+            boxes = pred_boxes[i][bg_mask]
+
+            # cxcywh → xywh (COCO format, pixel coords)
+            cx, cy, w, h = boxes.unbind(-1)
+            coco_boxes = torch.stack([
+                cx * img_w - w * img_w / 2,
+                cy * img_h - h * img_h / 2,
+                w * img_w,
+                h * img_h,
+            ], dim=-1)
+
+            for j in range(len(confs)):
+                predictions.append({
+                    "image_id": image_id,
+                    "category_id": labels[j].item(),
+                    "bbox": coco_boxes[j].cpu().tolist(),
+                    "score": confs[j].item(),
+                })
+
+            # GT
+            gt_boxes = batch_targets[i]["boxes"]
+            gt_labels = batch_targets[i]["labels"]
+            for j in range(len(gt_labels)):
+                cx, cy, w, h = gt_boxes[j].unbind(-1)
+                targets.append({
+                    "image_id": image_id,
+                    "category_id": gt_labels[j].item(),
+                    "bbox": [
+                        (cx * img_w - w * img_w / 2).item(),
+                        (cy * img_h - h * img_h / 2).item(),
+                        (w * img_w).item(),
+                        (h * img_h).item(),
+                    ],
+                    "area": (w * img_w * h * img_h).item(),
+                    "iscrowd": 0,
+                })
+
+    return predictions, targets
+
+
+def compute_map(predictions, targets, num_classes=12):
+    """计算 COCO-style mAP@50-95。
+
+    需要安装 pycocotools。
+
+    Args:
+        predictions: list of dict (COCO prediction format)
+        targets: list of dict (COCO annotation format)
+        num_classes: 类别数
+
+    Returns:
+        dict: {mAP50, mAP75, mAP50-95, per_class}
+    """
+    try:
+        from pycocotools.coco import COCO
+        from pycocotools.cocoeval import COCOeval
+    except ImportError:
+        print("  ⚠ pycocotools 未安装，跳过 mAP 计算")
+        print("  安装: pip install pycocotools")
+        return {"mAP50": 0.0, "mAP75": 0.0, "mAP50-95": 0.0}
+
+    if len(predictions) == 0 or len(targets) == 0:
+        print("  ⚠ 无预测或无标注，跳过 mAP 计算")
+        return {"mAP50": 0.0, "mAP75": 0.0, "mAP50-95": 0.0}
+
+    # 构造 COCO GT JSON
+    gt_json = {
+        "images": [],
+        "annotations": [],
+        "categories": [
+            {"id": i, "name": f"class_{i}"} for i in range(num_classes)
+        ],
+    }
+
+    image_ids = set()
+    ann_id = 1
+    for t in targets:
+        image_ids.add(t["image_id"])
+    for img_id in sorted(image_ids):
+        gt_json["images"].append({"id": img_id})
+
+    for t in targets:
+        gt_json["annotations"].append({
+            "id": ann_id,
+            "image_id": t["image_id"],
+            "category_id": t["category_id"],
+            "bbox": t["bbox"],
+            "area": t.get("area", t["bbox"][2] * t["bbox"][3]),
+            "iscrowd": t.get("iscrowd", 0),
+        })
+        ann_id += 1
+
+    # 保存临时 JSON
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(gt_json, f)
+        gt_path = f.name
+
+    coco_gt = COCO(gt_path)
+    coco_dt = coco_gt.loadRes(predictions)
+
+    coco_eval = COCOeval(coco_gt, coco_dt, "bbox")
+    coco_eval.evaluate()
+    coco_eval.accumulate()
+    coco_eval.summarize()
+
+    # 提取关键指标
+    stats = coco_eval.stats
+    results = {
+        "mAP50": stats[1],       # IoU=0.50
+        "mAP75": stats[2],        # IoU=0.75
+        "mAP50-95": stats[0],     # mAP @[IoU=0.50:0.95]
+        "per_class": {},
+    }
+
+    # 每个类别的 AP
+    for cat_id in range(num_classes):
+        coco_eval_cls = COCOeval(coco_gt, coco_dt, "bbox")
+        coco_eval_cls.params.catIds = [cat_id]
+        coco_eval_cls.evaluate()
+        coco_eval_cls.accumulate()
+        results["per_class"][cat_id] = coco_eval_cls.stats[0]
+
+    os.unlink(gt_path)
+    return results
+
+
+def validate(model, loader, device, num_classes=12, use_amp=True):
+    """完整验证流程：推理 + mAP 计算。
+
+    Args:
+        model: M3F-DETR 模型
+        loader: 验证集 DataLoader
+        device: cuda / cpu
+        num_classes: 类别数
+        use_amp: 是否使用混合精度
+
+    Returns:
+        dict: mAP 结果
+    """
+    print("  开始验证...")
+    predictions, targets = evaluate_model(model, loader, device, use_amp)
+    print(f"  预测 {len(predictions)} 个框, GT {len(targets)} 个框")
+
+    results = compute_map(predictions, targets, num_classes)
+
+    print(f"  mAP@50-95: {results['mAP50-95']:.4f}")
+    print(f"  mAP@50:     {results['mAP50']:.4f}")
+    print(f"  mAP@75:     {results['mAP75']:.4f}")
+
+    return results

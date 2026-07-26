@@ -1,0 +1,85 @@
+# M3F-DETR 训练配置
+# 使用方式: python train.py --config configs/train.yaml
+
+# ---- 数据集 ----
+dataset:
+  root: data/train
+  num_classes: 12
+
+# ---- 输入 ----
+input:
+  width: 1280
+  height: 768
+
+# ---- 模型 ----
+model:
+  backbone: swin_large       # swin_large / swin_tiny
+  hidden_dim: 256
+  queries: 900               # DINO Object Query 数量
+
+# ---- 训练 ----
+train:
+  batch_size: 2              # RTX 4090: 2, A100 80G: 8
+  epochs: 200                # 总训练轮数
+  amp: true                  # 混合精度
+  ema: true                  # EMA 模型平均
+  ema_decay: 0.9999
+  grad_clip: 0.1             # 梯度裁剪阈值
+
+  # 三阶段训练策略
+  stages:
+    - name: "stage1_freeze_backbone"
+      epochs: 50
+      freeze: ["rgb"]
+      lr: 1e-4
+
+    - name: "stage2_partial_unfreeze"
+      epochs: 100
+      freeze: []
+      lr: 5e-5
+
+    - name: "stage3_full_finetune"
+      epochs: 50
+      freeze: []
+      lr: 1e-5
+
+# ---- 优化器 ----
+optimizer:
+  name: AdamW
+  lr: 0.0001
+  backbone_lr: 0.00001
+  weight_decay: 0.05
+
+# ---- 学习率调度 ----
+scheduler:
+  type: warmup_cosine        # cosine / warmup_cosine
+  warmup_epochs: 5
+
+# ---- 损失 ----
+loss:
+  cost_class: 2.0
+  cost_bbox: 5.0
+  cost_giou: 2.0
+  focal_alpha: 0.25
+  focal_gamma: 2.0
+
+# ---- 5-Fold 交叉验证 ----
+cv:
+  num_folds: 5
+  split_dir: splits
+
+# ---- Checkpoint ----
+checkpoint:
+  save_dir: checkpoints
+  save_freq: 10
+  best_metric: mAP50-95
+
+# ---- 日志 ----
+log:
+  log_interval: 50
+  tensorboard: false
+
+# ---- 硬件 ----
+device: cuda
+seed: 42
+num_workers: 8               # 服务器上建议 8，Windows 本地用 0

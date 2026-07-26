@@ -1,0 +1,61 @@
+# Debug 配置 — 用于快速验证 pipeline
+# 使用方式: python train.py --config configs/debug.yaml
+
+dataset:
+  root: data/train
+  num_classes: 12
+
+input:
+  width: 640
+  height: 384
+
+model:
+  backbone: swin_tiny
+  hidden_dim: 128
+  queries: 100
+
+train:
+  epochs: 5
+  batch_size: 2
+  amp: true
+  ema: false
+  ema_decay: 0.0
+  grad_clip: 0.1
+  stages:
+    - name: "debug"
+      epochs: 5
+      freeze: []
+      lr: 1e-4
+
+optimizer:
+  name: AdamW
+  lr: 0.0001
+  backbone_lr: 0.00001
+  weight_decay: 0.05
+
+scheduler:
+  type: cosine
+  warmup_epochs: 1
+
+loss:
+  cost_class: 2.0
+  cost_bbox: 5.0
+  cost_giou: 2.0
+  focal_alpha: 0.25
+  focal_gamma: 2.0
+
+cv:
+  num_folds: 0
+  split_dir: splits
+
+checkpoint:
+  save_dir: checkpoints/debug
+  save_freq: 1
+
+log:
+  log_interval: 5
+  tensorboard: false
+
+device: cuda
+seed: 42
+num_workers: 0
