@@ -15,10 +15,10 @@ import torch.nn.functional as F
 class MultiScaleFusion(nn.Module):
     """多尺度特征融合 FPN。
 
-    输入: backbone 多尺度特征 [P2(192), P3(384), P4(768), P5(1536)]
-    输出: 融合后多尺度特征 [256, 256, 256, 256]
+    输入: backbone 多尺度特征 [P2, P3, P4, P5]，各层通道数由 backbone 决定
+    输出: 融合后多尺度特征，统一输出通道数
 
-    P5 → 1×1 → 256 → upsample → + P4 → 256 → upsample → + P3 → 256 → upsample → + P2 → 256
+    P5 → 1×1 → N → upsample → + P4 → N → upsample → + P3 → N → upsample → + P2 → N
     """
 
     def __init__(
@@ -29,14 +29,18 @@ class MultiScaleFusion(nn.Module):
     ):
         """
         Args:
-            in_channels_list: 各层输入通道数，默认 [192, 384, 768, 1536] (SwinV2-L)
+            in_channels_list: 各层输入通道数，必须显式传入（与 backbone 通道对齐），
+                             不复用默认值避免 backbone 切换后通道不一致。
             out_channels: 输出通道数
             use_deform: 是否使用可变形卷积
         """
         super().__init__()
 
         if in_channels_list is None:
-            in_channels_list = [96, 192, 384, 768]
+            raise ValueError(
+                "in_channels_list 必须显式传入。"
+                "请从 backbone.channels 获取，例如: MultiScaleFusion(in_channels_list=backbone_channels)"
+            )
 
         self.num_levels = len(in_channels_list)
         self.out_channels = out_channels
@@ -70,6 +74,8 @@ class MultiScaleFusion(nn.Module):
         Returns:
             list of (B, out_channels, H_i, W_i)
         """
+        assert len(features) == self.num_levels, \
+            f"FPN 期望 {self.num_levels} 层特征输入，实际收到 {len(features)} 层"
         # 横向连接
         laterals = [
             conv(feat) for conv, feat in zip(self.lateral_convs, features)

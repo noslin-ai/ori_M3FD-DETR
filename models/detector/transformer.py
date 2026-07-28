@@ -61,10 +61,12 @@ class DINOTransformer(nn.Module):
         # 将位置编码加到 memory 上
         memory = memory + pos
 
-        # 使用传入的 query_embed 或默认的内部 query
+        # 使用传入的 query_embed；当前由 dino_detector.py 传入，不支持内部 fallback
         if query_embed is None:
-            B = memory.shape[1]
-            query_embed = self.query_embed.weight.unsqueeze(1).repeat(1, B, 1)
+            raise ValueError(
+                "DINOTransformer.forward 必须传入 query_embed 参数。"
+                "请通过 dino_detector.py 调用，不要直接使用 DINOTransformer。"
+            )
 
         # 处理 attention mask（DN 训练时限制原始 query 看到 DN query）
         tgt_mask = None

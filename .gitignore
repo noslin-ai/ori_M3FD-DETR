@@ -54,3 +54,5 @@ Thumbs.db
 # Log files
 # ==========================
 *.log
+
+.workbuddy

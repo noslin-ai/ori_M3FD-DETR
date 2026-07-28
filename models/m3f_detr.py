@@ -66,8 +66,12 @@ class M3F_DETR(nn.Module):
         # ---- 模态编码器 ----
         self.rgb_backbone = RGBBackbone(backbone_name=backbone_name, pretrained=False)
 
-        # 从 backbone 自动获取各层通道数
+        # 从 backbone 自动获取各层通道数（唯一真值来源，非硬编码）
         backbone_channels = self.rgb_backbone.channels
+        assert len(backbone_channels) == 4, \
+            f"期望 backbone 输出 4 层多尺度特征，实际 {len(backbone_channels)} 层: {backbone_channels}"
+        print(f"[M3F-DETR] backbone={backbone_name}, channels={backbone_channels}, "
+              f"hidden_dim={hidden_dim}, num_queries={num_queries}")
 
         self.ir_encoder = ThermalAdapter(backbone_channels[0])
         self.depth_encoder = DepthEncoder(backbone_channels[0])
@@ -117,12 +121,12 @@ class M3F_DETR(nn.Module):
         depth_feature = self.depth_encoder(depth)  # (B, ch0, H/4, W/4)
 
         # (4) CMFA 三模态融合
-        # 使用 P2 (B, 192, H/4, W/4) 作为 RGB 输入，与 IR/Depth 通道数和分辨率匹配
+        # 使用 P2 作为 RGB 输入，与 IR/Depth 通道数和分辨率匹配
         fused = self.fusion(
-            rgb_features[0],      # P2 (B, 192, H/4, W/4)
-            ir_feature,           # (B, 192, H/4, W/4)
-            depth_feature,        # (B, 192, H/4, W/4)
-        )  # 输出 (B, 192, H/4, W/4)
+            rgb_features[0],      # P2 (B, ch[0], H/4, W/4)
+            ir_feature,           # (B, ch[0], H/4, W/4)
+            depth_feature,        # (B, ch[0], H/4, W/4)
+        )  # 输出 (B, ch[0], H/4, W/4)
 
         # (5) 多尺度 FPN — 将 P2 替换为融合后特征
         fused_features = [fused] + list(rgb_features[1:])
@@ -131,4 +135,27 @@ class M3F_DETR(nn.Module):
         # (6) DINO 检测器
         outputs = self.detector(features, targets)
 
+        return outputs
+
+    def forward_debug(self, rgb, ir, depth, targets=None):
+        """带调试输出的 forward，用于排查通道不匹配问题。
+        确认无误后可切换回 forward()。
+        """
+        rgb_features = self.rgb_backbone(rgb)
+        print(f"  [DEBUG] RGB feats: {[f.shape for f in rgb_features]}")
+
+        ir_feature = self.ir_encoder(ir)
+        print(f"  [DEBUG] IR feat:   {ir_feature.shape}")
+
+        depth_feature = self.depth_encoder(depth)
+        print(f"  [DEBUG] Depth feat: {depth_feature.shape}")
+
+        fused = self.fusion(rgb_features[0], ir_feature, depth_feature)
+        print(f"  [DEBUG] Fused:     {fused.shape}")
+
+        fused_features = [fused] + list(rgb_features[1:])
+        print(f"  [DEBUG] FPN input channels: {[f.shape[1] for f in fused_features]}")
+
+        features = self.fpn(fused_features)
+        outputs = self.detector(features, targets)
         return outputs

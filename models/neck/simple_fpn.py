@@ -20,7 +20,7 @@ class SimpleFPN(nn.Module):
     def __init__(self, in_channels_list, out_channels=256):
         """
         Args:
-            in_channels_list: 各层输入通道数, 如 [192, 384, 768, 1536]
+            in_channels_list: 各层输入通道数（由 backbone 决定，需显式传入）
             out_channels: 输出通道数（统一对齐）
         """
         super().__init__()

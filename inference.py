@@ -121,6 +121,9 @@ def main():
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--num-classes", type=int, default=12)
     parser.add_argument("--use-ema", action="store_true", help="使用 EMA 权重")
+    parser.add_argument("--backbone", default=None,
+                        choices=["swin_tiny","swin_small","swin_base","swin_large"],
+                        help="backbone 类型 (默认从 checkpoint 自动读取，或 fallback 为 swin_large)")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--config", default="configs/m3f_dino.yaml")
     args = parser.parse_args()
@@ -161,23 +164,41 @@ def main():
 
     # ---- 模型 ----
     print("\n[2] Loading model...")
-    # 从 checkpoint 或默认配置获取模型参数
+    # 先加载 checkpoint 获取模型配置
+    state = _safe_torch_load(args.checkpoint, map_location="cpu")
+    cfg = state.get("cfg", {}) if isinstance(state, dict) else {}
+
+    # 确定 backbone: 优先使用命令行参数 > checkpoint cfg > fallback
+    backbone_name = args.backbone
+    if backbone_name is None:
+        backbone_name = cfg.get("backbone", "swin_large")
+    num_classes = cfg.get("num_classes", args.num_classes)
+    hidden_dim  = cfg.get("hidden_dim", getattr(args, 'hidden_dim', 256))
+    num_queries = cfg.get("num_queries", getattr(args, 'num_queries', 900))
+
+    print(f"  Backbone: {backbone_name} (from {'checkpoint cfg' if cfg.get('backbone') else 'fallback'})")
     model = M3F_DETR(
-        num_classes=args.num_classes,
-        hidden_dim=getattr(args, 'hidden_dim', 256),
-        num_queries=getattr(args, 'num_queries', 900),
+        num_classes=num_classes,
+        hidden_dim=hidden_dim,
+        num_queries=num_queries,
+        backbone_name=backbone_name,
         use_dn=False,  # 推理时不需要 DN
     ).to(device)
 
-    state = _safe_torch_load(args.checkpoint, map_location=device)
+    # 加载权重（如果是 CPU 加载的 state 需确保到 device）
+    if device != "cpu":
+        state = {k: v.to(device) if isinstance(v, torch.Tensor) else v
+                 for k, v in state.items() if k != "cfg"}
 
-    if args.use_ema and "ema" in state and state["ema"]:
+    if args.use_ema and "ema" in state and state.get("ema"):
         print("  Using EMA weights")
         model.load_state_dict(state["ema"])
     elif "model" in state:
         model.load_state_dict(state["model"])
     else:
-        model.load_state_dict(state)
+        # 移除 cfg 后再加载
+        state_to_load = {k: v for k, v in state.items() if k != "cfg"}
+        model.load_state_dict(state_to_load)
 
     model.eval()
 

@@ -223,6 +223,14 @@ def main():
         print(f"  Total params: {total_params / 1e6:.1f}M")
         print(f"  Trainable: {trainable_params / 1e6:.1f}M")
 
+    # 模型配置字典（用于存入 checkpoint，推理时自动恢复）
+    train_cfg = {
+        "backbone": config["model"].get("backbone", "swin_large"),
+        "hidden_dim": config["model"]["hidden_dim"],
+        "num_queries": config["model"]["queries"],
+        "num_classes": config["dataset"]["num_classes"],
+    }
+
     # ---- 损失 ----
     loss_cfg = config["loss"]
     criterion = DINOLoss(
@@ -349,6 +357,7 @@ def main():
                         model, optimizer, current_epoch,
                         os.path.join(save_dir, "best.pth"),
                         scaler=scaler, ema=ema, loss=avg_loss, best_metric=map_5095,
+                        cfg=train_cfg,
                     )
                     print(f"  🏆 New Best mAP@50-95: {best_map:.4f}")
 
@@ -358,6 +367,7 @@ def main():
                     model, optimizer, current_epoch,
                     os.path.join(save_dir, "latest.pth"),
                     scaler=scaler, ema=ema, loss=avg_loss,
+                    cfg=train_cfg,
                 )
 
             current_epoch += 1
@@ -368,6 +378,7 @@ def main():
             model, optimizer, current_epoch - 1,
             os.path.join(save_dir, "final.pth"),
             scaler=scaler, ema=ema, loss=avg_loss, best_metric=best_map,
+            cfg=train_cfg,
         )
         print("\n" + "=" * 70)
         print(f"  Training complete! Best mAP@50-95: {best_map:.4f}")

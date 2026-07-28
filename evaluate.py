@@ -40,6 +40,9 @@ def main():
     parser.add_argument("--num-classes", type=int, default=12)
     parser.add_argument("--export-json", default=None, help="导出 COCO JSON 路径")
     parser.add_argument("--use-ema", action="store_true", help="使用 EMA 权重")
+    parser.add_argument("--backbone", default=None,
+                        choices=["swin_tiny","swin_small","swin_base","swin_large"],
+                        help="backbone 类型 (默认从 checkpoint 自动读取，或 fallback 为 swin_large)")
     parser.add_argument("--device", default="cuda")
     args = parser.parse_args()
 
@@ -67,19 +70,47 @@ def main():
 
     # ---- 模型 ----
     print("\n[2] 加载模型...")
-    model = M3F_DETR(num_classes=args.num_classes).to(device)
+    # 先加载 checkpoint 获取模型配置
+    state = _safe_torch_load(args.checkpoint, map_location="cpu")
+    cfg = state.get("cfg", {}) if isinstance(state, dict) else {}
 
-    # 加载 checkpoint
+    # 确定 backbone: 优先使用命令行参数 > checkpoint cfg > fallback
+    backbone_name = args.backbone
+    if backbone_name is None:
+        backbone_name = cfg.get("backbone", "swin_large")
+    num_classes = cfg.get("num_classes", args.num_classes)
+    hidden_dim  = cfg.get("hidden_dim", 256)
+    num_queries = cfg.get("num_queries", 900)
+
+    print(f"  模型配置: backbone={backbone_name}, classes={num_classes}, "
+          f"hidden_dim={hidden_dim}, queries={num_queries}")
+    print(f"  来源: {'checkpoint cfg' if cfg.get('backbone') else 'fallback'}")
+
+    model = M3F_DETR(
+        num_classes=num_classes,
+        hidden_dim=hidden_dim,
+        num_queries=num_queries,
+        backbone_name=backbone_name,
+    ).to(device)
+
+    # 加载权重（已在上面加载过一次用于读取 cfg）
     print(f"  Checkpoint: {args.checkpoint}")
-    state = _safe_torch_load(args.checkpoint, map_location=device)
+    # 将 CPU 上加载的 state tensors 移到 device
+    if device != "cpu":
+        state = {k: v.to(device) if isinstance(v, torch.Tensor) else v
+                 for k, v in state.items() if k != "cfg"}
 
     # 使用 EMA 权重
-    if args.use_ema and "ema" in state and state["ema"]:
+    if args.use_ema and "ema" in state and state.get("ema"):
         print("  使用 EMA 权重")
         model.load_state_dict(state["ema"])
     else:
         print("  使用普通权重")
-        model.load_state_dict(state["model"] if "model" in state else state)
+        if "model" in state:
+            model.load_state_dict(state["model"])
+        else:
+            state_to_load = {k: v for k, v in state.items() if k != "cfg"}
+            model.load_state_dict(state_to_load)
 
     model.eval()
 

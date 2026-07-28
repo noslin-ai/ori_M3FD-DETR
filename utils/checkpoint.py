@@ -29,6 +29,7 @@ def save_checkpoint(
     loss=None,
     best_metric=None,
     extra=None,
+    cfg=None,
 ):
     """保存训练 checkpoint。
 
@@ -42,6 +43,7 @@ def save_checkpoint(
         loss: 当前 loss (可选)
         best_metric: 最佳指标值 (可选)
         extra: 额外信息 dict (可选)
+        cfg: 模型配置 dict (可选，推荐保存以便推理时自动恢复)
     """
     state = {
         "model": model.state_dict(),
@@ -59,6 +61,8 @@ def save_checkpoint(
         state["best_metric"] = best_metric
     if extra is not None:
         state.update(extra)
+    if cfg is not None:
+        state["cfg"] = cfg
 
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     torch.save(state, path)
