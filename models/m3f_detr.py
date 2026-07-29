@@ -77,7 +77,7 @@ class M3F_DETR(nn.Module):
         self.depth_encoder = DepthEncoder(backbone_channels[0])
 
         # ---- 三模态融合 ----
-        self.fusion = CMFA(dim=backbone_channels[0])
+        self.fusion = CMFA(dim=backbone_channels[0], use_downsample=True)
 
 
         # ---- 多尺度 FPN ----
@@ -114,11 +114,27 @@ class M3F_DETR(nn.Module):
         # [P2(ch0, H/4, W/4), P3(ch1, H/8, W/8),
         #  P4(ch2, H/16, W/16), P5(ch3, H/32, W/32)]
 
+        # ---- 运行时通道校验: 确保 Backbone/编码器/CMFA/FPN 通道一致 ----
+        ch = self.rgb_backbone.channels  # [C0, C1, C2, C3]
+        assert len(rgb_features) == len(ch), (
+            f"Backbone 返回 {len(rgb_features)} 层特征, 期望 {len(ch)} 层")
+        for i in range(len(ch)):
+            assert rgb_features[i].shape[1] == ch[i], (
+                f"RGB 特征层 {i} 通道 {rgb_features[i].shape[1]} ≠ 期望 {ch[i]}")
+
         # (2) IR Encoder → IR 特征
         ir_feature = self.ir_encoder(ir)  # (B, ch0, H/4, W/4)
+        assert ir_feature.shape[1] == ch[0], (
+            f"IR 编码器输出 {ir_feature.shape[1]} 通道 ≠ 期望 {ch[0]}")
+        assert ir_feature.shape[2:] == rgb_features[0].shape[2:], (
+            f"IR 空间尺寸 {ir_feature.shape[2:]} ≠ RGB P2 {rgb_features[0].shape[2:]}")
 
         # (3) Depth Encoder → Depth 特征
         depth_feature = self.depth_encoder(depth)  # (B, ch0, H/4, W/4)
+        assert depth_feature.shape[1] == ch[0], (
+            f"Depth 编码器输出 {depth_feature.shape[1]} 通道 ≠ 期望 {ch[0]}")
+        assert depth_feature.shape[2:] == rgb_features[0].shape[2:], (
+            f"Depth 空间尺寸 {depth_feature.shape[2:]} ≠ RGB P2 {rgb_features[0].shape[2:]}")
 
         # (4) CMFA 三模态融合
         # 使用 P2 作为 RGB 输入，与 IR/Depth 通道数和分辨率匹配
@@ -127,6 +143,8 @@ class M3F_DETR(nn.Module):
             ir_feature,           # (B, ch[0], H/4, W/4)
             depth_feature,        # (B, ch[0], H/4, W/4)
         )  # 输出 (B, ch[0], H/4, W/4)
+        assert fused.shape[1] == ch[0], (
+            f"CMFA 融合输出 {fused.shape[1]} 通道 ≠ 期望 {ch[0]}")
 
         # (5) 多尺度 FPN — 将 P2 替换为融合后特征
         fused_features = [fused] + list(rgb_features[1:])

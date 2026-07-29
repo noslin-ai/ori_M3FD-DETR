@@ -1,6 +1,70 @@
 # 代码修改记录 (CHANGELOG)
 
-> 项目: M3F-DETR | 基于: `项目问题分析报告.md` (第四版)
+> 项目: M3F-DETR | 基于: `项目问题分析报告.md`
+
+---
+
+## v0.3.0 — 运行时通道校验 + CMFA 降采样内存优化
+
+**日期:** 2026-07-29  
+**基于:** 服务器 2026-07-29 运行日志诊断 (48 通道断点定位 + CMFA OOM 确认)  
+**目标:** 根治多模态管线通道不一致问题，大分辨率训练可运行
+
+---
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `models/m3f_detr.py` | 加固 | forward 中增加 Backbone / IR / Depth / CMFA / FPN 逐层通道 & 空间校验断言 |
+| `models/fusion/cmfa.py` | 优化 | 新增 `use_downsample` 模式：2×2 pool → Attention → upsample，token 减少 4×，attention 显存降低 ~16× |
+
+### 详细修改
+
+#### 1. `models/m3f_detr.py` — 运行时通道+空间校验
+
+**修改原因:** 服务器日志确认 Backbone 初始化正常 (`channels=[96,192,384,768]`)，但 forward 中 CMFA 输出 48 通道。根源在 IR/Depth 编码器或 CMFA 内部存在未同步的降维代码。新增运行时断言确保即使代码版本不一致，也能在通道不匹配的第一时间抛出含具体通道值的明确错误。
+
+**变更内容:**
+
+- 第 116-130 行: Backbone 输出后逐层验证 RGB 特征通道数与 `backbone_channels` 一致
+- 第 132-141 行: IR/Depth 编码器输出验证通道数 = `ch[0]`，验证空间尺寸与 RGB P2 对齐
+- 第 148-150 行: CMFA 输出验证通道数 = `ch[0]`
+
+诊断效果: 服务器报错从模糊的 `Conv2d expected 96 but got 48` 变为清晰的 `CMFA 融合输出 48 通道 ≠ 期望 96`，直接定位故障模块。
+
+#### 2. `models/fusion/cmfa.py` — 降采样注意力模式
+
+**修改原因:** 服务器日志确认 CMFA 在 P2 层做全局 MultiheadAttention 导致 OOM（1920×1080 输入下 P2 约 270×480=129600 token，attention score 矩阵 ≈ 67 GB float32）。报告问题 #2 建议降采样方案而非直接删除 P2 融合。
+
+**变更内容:**
+
+- `CMFA.__init__` 新增 `use_downsample` 参数 (默认 `True`)
+- `forward` 新增降采样分支: 输入 H>32 且 W>32 时 2×2 avg_pool，token 减少 4×，attention 显存降低 ~16×
+- 注意力后 bilinear upsample 回原始分辨率
+- `use_downsample=False` 时行为与旧版完全一致，向后兼容
+
+**副作用评估:**
+
+| 场景 | 影响 |
+|------|------|
+| 小分辨率输入 (H≤32 或 W≤32) | 自动跳过降采样，行为不变 |
+| 大分辨率训练 | 显存大幅降低，P2 细节通过上采样保留 |
+| 精度 (mAP) | 轻微下降可预期（降采样丢失部分高频细节），建议 A/B 实验确认 |
+
+#### 3. `models/m3f_detr.py` — CMFA 启用降采样
+
+第 80 行: `CMFA(dim=backbone_channels[0])` → `CMFA(dim=backbone_channels[0], use_downsample=True)`
+
+---
+
+### 验证清单
+
+- [x] `CMFA(96, use_downsample=True)` 小图输入自动跳过降采样 (H≤32 分支)
+- [x] `CMFA(96, use_downsample=True)` 大图输入正确 pool→attention→upsample
+- [ ] 服务器 `python test.py` 全部 4 个测试通过
+- [ ] `forward_debug` 打印各层 shape 确认 IR/Depth/CMFA 输出均为 96 通道
+- [ ] 训练 `batch_size=4` 在 24GB GPU 上不 OOM
 
 ---
 
