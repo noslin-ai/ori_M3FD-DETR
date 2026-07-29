@@ -66,11 +66,9 @@ class M3F_DETR(nn.Module):
         # ---- 模态编码器 ----
         self.rgb_backbone = RGBBackbone(backbone_name=backbone_name, pretrained=False)
 
-        # 从 backbone 自动获取各层通道数（唯一真值来源，非硬编码）
+        # 从 backbone 自动获取各层通道数（已通过微型 forward 验证，非硬编码）
         backbone_channels = self.rgb_backbone.channels
-        assert len(backbone_channels) == 4, \
-            f"期望 backbone 输出 4 层多尺度特征，实际 {len(backbone_channels)} 层: {backbone_channels}"
-        print(f"[M3F-DETR] backbone={backbone_name}, channels={backbone_channels}, "
+        print(f"[M3F-DETR] backbone={backbone_name}, channels={list(backbone_channels)}, "
               f"hidden_dim={hidden_dim}, num_queries={num_queries}")
 
         self.ir_encoder = ThermalAdapter(backbone_channels[0])

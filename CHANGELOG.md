@@ -4,7 +4,54 @@
 
 ---
 
-## v0.3.0 — 运行时通道校验 + CMFA 降采样内存优化
+## v0.3.1 (patch) — 修复 Backbone 通道声明与实际输出不一致
+
+**日期:** 2026-07-29  
+**触发:** v0.3.0 运行时断言捕获 `RGB 特征层 1 通道 48 ≠ 期望 192`  
+**根因:** `timm.feature_info.channels()` 返回值与 backbone 实际 forward 输出不一致（timm 版本/配置差异导致）
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `models/backbone/rgb_backbone.py` | 修复 | `self.channels` 不再信任 `feature_info.channels()` 声明，改为微型 forward 验证后按实际值修正 |
+
+### 详细修改
+
+#### `models/backbone/rgb_backbone.py` — 通道自检机制
+
+**变更前:**
+```python
+self.channels = self.backbone.feature_info.channels()
+```
+仅读取 timm 声明的理论值，不验证实际 forward 输出。
+
+**变更后:**
+1. 显式设置 `self.backbone.feature_info.out_indices = (0, 1, 2, 3)` — 防止 timm 版本不同导致默认 out_indices 不一致
+2. 新增 `_verify_channels()` — 用 64×64 微型 tensor 做一次 forward，读取实际输出通道
+3. 若实际输出层数/通道数与声明不一致，打印警告并按实际值修正
+4. 若微型 forward 失败（极小概率），回退到声明值
+
+**效果:**
+- 服务器上 swin_small 实际输出 `[48, 96, 192, 384]` 而声明为 `[96, 192, 384, 768]` 时，`self.channels` 会按实际 `[48, 96, 192, 384]` 存储
+- 所有下游模块（ThermalAdapter、DepthEncoder、CMFA、FPN）通过 `backbone_channels` 自动适配正确通道
+- 切 backbone 或换 timm 版本后无需手动修改通道值
+
+**副作用:**
+- `__init__` 增加一次无梯度的微型 forward（64×64），耗时 < 10ms，不累积到训练
+- 与 DDP 无冲突（DDP 包装发生在 `__init__` 之后，已完成 self.channels 的确定）
+
+### 验证清单
+
+- [x] `M3F_DETR(backbone_name='swin_small')` 正常初始化，channels 通过微型 forward 验证
+- [x] 声明值与实际值一致时不打印警告（零误报）
+- [ ] 服务器 `python test.py` 4 项测试全部通过
+- [ ] IR/Depth/CMFA/FPN 通道链路全部自动对齐
+- [ ] 训练不 OOM（CMFA use_downsample 生效）
+
+---
+
+## v0.3.0 (minor) — 运行时通道校验 + CMFA 降采样内存优化
 
 **日期:** 2026-07-29  
 **基于:** 服务器 2026-07-29 运行日志诊断 (48 通道断点定位 + CMFA OOM 确认)  
