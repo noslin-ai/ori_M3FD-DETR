@@ -4,6 +4,57 @@
 
 ---
 
+## v0.3.2 (patch) — 修复 timm Swin NHWC → NCHW 格式转换
+
+**日期:** 2026-07-30  
+**根因确认:** timm Swin `features_only=True` 返回 NHWC `[B,H,W,C]`，M3F-DETR 全线按 NCHW `[B,C,H,W]` 设计，`rgb_backbone.py` 的 `forward()` 缺少 `permute(0,3,1,2)` 导致所有下游模块维度解读错位。此前观察到的"48/80/160 通道"均为被误读的空间维度。`feature_info.channels()` 和 backbone 实际输出通道数自始至终正确。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `models/backbone/rgb_backbone.py` | 修复 | `forward()` 添加 NHWC→NCHW 转换；移除 v0.3.1 错误诊断引入的 `_verify_channels()` |
+| `models/m3f_detr.py` | 加固 | 恢复 `len(backbone_channels)==4` 断言；更新注释 |
+
+### 详细修改
+
+#### `models/backbone/rgb_backbone.py`
+
+**变更前:**
+```python
+def forward(self, x):
+    feats = self.backbone(x)   # timm Swin 返回 [B,H,W,C]
+    return feats               # 直接透传 NHWC → 下游全部解读错位
+```
+
+**变更后:**
+```python
+def forward(self, x):
+    feats = self.backbone(x)          # timm Swin: [B,H,W,C]
+    out = []
+    for f in feats:
+        if f.dim() == 4:
+            f = f.permute(0, 3, 1, 2).contiguous()  # NHWC → NCHW
+        out.append(f)
+    return out
+```
+
+同时移除了 v0.3.1 的 `_verify_channels()` 方法。该方法基于错误的诊断假设（"channels 声明值错误"），它在 NHWC 格式下用 `f.shape[1]` 读到了 H 而非 C，从而产生了"通道数不一致"的假阳性。实际 `feature_info.channels()` 完全正确，移除该额外机制，`self.channels` 恢复为直接读取 `feature_info.channels()`。
+
+#### `models/m3f_detr.py`
+
+恢复 `assert len(backbone_channels) == 4` 断言（v0.3.1 曾移除）。因根因（NHWC）已修正，通道层数不再需要自适应。
+
+### 验证清单
+
+- [x] `RGBBackbone(backbone_name='swin_small')` 正确输出 NCHW 格式
+- [x] 服务器 timm 直接测试验证：forward 原始输出为 NHWC，修复后为 NCHW
+- [ ] 服务器 `python test.py` 全部 4 项测试通过
+- [ ] 下游模块（IR/Depth/CMFA/FPN）通道链路全部对齐
+- [ ] CMFA OOM 在 use_downsample 模式下不触发
+
+---
+
 ## v0.3.1 (patch) — 修复 Backbone 通道声明与实际输出不一致
 
 **日期:** 2026-07-29  
