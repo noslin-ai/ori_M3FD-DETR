@@ -16,12 +16,14 @@ class PositionEmbeddingSine(nn.Module):
     为 (B, C, H, W) 特征图生成位置编码 (B, num_pos_feats*2, H, W)。
 
     Args:
-        num_pos_feats: 每个维度的位置编码特征数（默认 128，
-            总输出 256 通道，匹配 hidden_dim=256）
+        num_pos_feats: 每个维度的位置编码特征数（总输出 = 2*num_pos_feats）。
+            必须等于 hidden_dim//2，使总输出 == hidden_dim。
     """
 
     def __init__(self, num_pos_feats=128):
         super().__init__()
+        assert num_pos_feats * 2 in (128, 256, 512), \
+            f"num_pos_feats={num_pos_feats}，总输出={num_pos_feats*2}。通常应为 hidden_dim//2"
         self.num_pos_feats = num_pos_feats
 
     def forward(self, x):
