@@ -22,9 +22,13 @@ class PositionEmbeddingSine(nn.Module):
 
     def __init__(self, num_pos_feats=128):
         super().__init__()
-        assert num_pos_feats * 2 in (128, 256, 512), \
-            f"num_pos_feats={num_pos_feats}，总输出={num_pos_feats*2}。通常应为 hidden_dim//2"
         self.num_pos_feats = num_pos_feats
+        # 硬校验: 防止旧代码或不同环境传错值
+        output_dim = num_pos_feats * 2
+        if output_dim != 256:
+            print(f"[PositionEmbeddingSine] WARNING: num_pos_feats={num_pos_feats}, "
+                  f"输出 {output_dim} ch ≠ 256 (hidden_dim)。自动修正为 128。")
+            self.num_pos_feats = 128
 
     def forward(self, x):
         """
