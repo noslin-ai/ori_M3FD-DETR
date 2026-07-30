@@ -4,6 +4,35 @@
 
 ---
 
+---
+
+## v0.3.3 (patch) — 修复 Transformer 接口对齐
+
+**日期:** 2026-07-30  
+**触发:** v0.3.2 backbone 修复后，错误下移到 Transformer
+- Test 2: `pos.shape[-1]=512 ≠ hidden_dim=256`（位置编码维度不匹配）
+- Test 3-4: `attn_mask` 未初始化（`use_dn=False` 时）
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `models/detector/dino_detector.py` | 修复 | `attn_mask` 显式初始化为 `None`；新增位置编码维度断言 |
+
+### 详细修改
+
+#### `models/detector/dino_detector.py`
+
+**变更 1 — attn_mask 初始化（UnboundLocalError）**
+
+第 132 行: DN 训练分支前显式 `attn_mask = None`，确保 `use_dn=False` / 推理时变量始终定义。
+
+**变更 2 — 位置编码维度断言**
+
+第 121-124 行: 新增 `assert pos_embed.shape[1] == self.hidden_dim`，在不匹配时打印含修复建议的明确错误（`num_pos_feats` 应为 `hidden_dim//2`）。
+
+---
+
 ## v0.3.2 (patch) — 修复 timm Swin NHWC → NCHW 格式转换
 
 **日期:** 2026-07-30  

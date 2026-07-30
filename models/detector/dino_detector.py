@@ -118,6 +118,9 @@ class DINODetector(nn.Module):
         # 取最后一层（最高层）做 position encoding
         feat_flat = features[-1]  # (B, C, H, W)
         pos_embed = self.position_embedding(feat_flat)  # (B, C, H, W)
+        assert pos_embed.shape[1] == self.hidden_dim, (
+            f"位置编码输出 {pos_embed.shape[1]} 通道 ≠ hidden_dim {self.hidden_dim}。"
+            f"请将 PositionEmbeddingSine 的 num_pos_feats 设为 hidden_dim//2={self.hidden_dim//2}")
 
         # Flatten 特征
         B, C, H, W = feat_flat.shape
@@ -129,6 +132,7 @@ class DINODetector(nn.Module):
 
         # Denoising (训练时)
         dn_meta = None
+        attn_mask = None
         if self.use_dn and self.training and targets is not None:
             query_embed, targets, attn_mask, dn_meta = prepare_for_dn(
                 query_embed.transpose(0, 1),  # (B, Nq, C)
