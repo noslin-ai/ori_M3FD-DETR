@@ -121,7 +121,8 @@ def test_loss_computation(data_root="data/train"):
     loss_dict = criterion(output, targets)
 
     for k, v in loss_dict.items():
-        print(f"  {k}: {v.item():.4f}")
+        value = v.item() if torch.is_tensor(v) else float(v)
+        print(f"  {k}: {value:.4f}")
 
     loss = loss_dict["loss"]
     loss.backward()
