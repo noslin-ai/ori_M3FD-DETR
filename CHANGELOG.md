@@ -399,3 +399,21 @@ weight_decay = float(config["optimizer"].get("weight_decay", 0.05))
 - [x] BF16 autocast RTX 5090 兼容
 - [x] torch.compile 有 try/except 兜底
 - [ ] 服务器训练 batch_size=8 不 OOM
+
+---
+
+## v0.4.1 (patch) — 修复 inference.py use_dn 与训练不一致
+
+**日期:** 2026-08-01 17:21
+**根因:** inference.py:185 `use_dn=False` 训练时 `use_dn=True`（默认），导致 checkpoint 含 `dn_query_embed.weight` 而推理模型无此参数 → `RuntimeError`
+
+### 修改
+
+| 文件 | 行号 | 改动 |
+|------|------|------|
+| `inference.py` | 185 | `use_dn=False` → `use_dn=True` |
+
+### 验证清单
+
+- [x] `grep -R use_dn` 确认训练 + 推理 now 统一为 True
+- [ ] 服务器 `python inference.py --checkpoint checkpoints/debug/final.pth` 正常加载

@@ -182,7 +182,7 @@ def main():
         hidden_dim=hidden_dim,
         num_queries=num_queries,
         backbone_name=backbone_name,
-        use_dn=False,  # 推理时不需要 DN
+        use_dn=True,  # 与训练 checkpoint 结构对齐
     ).to(device)
 
     # 加载权重（如果是 CPU 加载的 state 需确保到 device）
