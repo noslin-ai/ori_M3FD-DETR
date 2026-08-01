@@ -98,12 +98,13 @@ def build_optimizer(model, config):
         else:
             head_params.append(p)
 
-    backbone_lr = config["optimizer"].get("backbone_lr", config["optimizer"]["lr"] * 0.1)
-    weight_decay = config["optimizer"].get("weight_decay", 0.05)
+    lr = float(config["optimizer"]["lr"])
+    backbone_lr = float(config["optimizer"].get("backbone_lr", lr * 0.1))
+    weight_decay = float(config["optimizer"].get("weight_decay", 0.05))
 
     return torch.optim.AdamW([
         {"params": backbone_params, "lr": backbone_lr},
-        {"params": head_params, "lr": config["optimizer"]["lr"]},
+        {"params": head_params, "lr": lr},
     ], weight_decay=weight_decay)
 
 
@@ -310,9 +311,9 @@ def main():
                 if is_main:
                     print(f"  Frozen: {mod_name}")
 
-        # 重建优化器
-        if stage.get("lr"):
-            config["optimizer"]["lr"] = stage["lr"]
+        # 重建优化器（显式 float 转换防止 YAML 1e-4 被解析为字符串）
+        if stage.get("lr") is not None:
+            config["optimizer"]["lr"] = float(stage["lr"])
         optimizer = build_optimizer(model, config)
         scheduler = build_scheduler(
             optimizer, stage_epochs,

@@ -323,3 +323,43 @@ self.channels = self.backbone.feature_info.channels()
 - [x] `engine/__init__.py` 无残留注释，import 正常
 - [ ] 在比赛数据集上运行 `python train.py` 验证完整的训练前向通过
 - [ ] 使用新 checkpoint 运行 `python inference.py --checkpoint latest.pth --data-root data/test` 验证 cfg 自动恢复
+
+---
+
+## v0.3.5 (patch) — 修复 YAML 科学计数法解析 + optimizer float() 守卫
+
+**日期:** 2026-08-01
+**根因:** 项目环境 PyYAML 将 `lr: 1e-4` 解析为字符串，`train.py:315` 无类型转换赋值给 `config["optimizer"]["lr"]`，导致 `"1e-4" * 0.1` TypeError
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `train.py` | 加固 | `build_optimizer` 入口 `float()` 守卫 + stage lr 赋值 `float()` 转换 |
+| `configs/debug.yaml` | 修复 | `lr: 1e-4` → `lr: 0.0001` (兼容 PyYAML 解析差异) |
+
+### 详细修改
+
+#### `train.py` — build_optimizer float() 守卫
+
+第 101-103 行: 统一 `float()` 转换，兼容 YAML 字符串或浮点
+
+```python
+lr = float(config["optimizer"]["lr"])
+backbone_lr = float(config["optimizer"].get("backbone_lr", lr * 0.1))
+weight_decay = float(config["optimizer"].get("weight_decay", 0.05))
+```
+
+#### `train.py` — stage lr 赋值 float() 转换
+
+第 315-316 行: `stage.get("lr") is not None` + `float(stage["lr"])`
+
+#### `configs/debug.yaml` — 科学计数法改为纯浮点
+
+第 28 行: `lr: 1e-4` → `lr: 0.0001` (`1e-4` 在项目环境 PyYAML 中被解析为 str)
+
+### 验证清单
+
+- [x] `yaml.safe_load` 解析 `0.0001` 为 float ✓
+- [x] `lr: 1e-4` 被 PyYAML 解析为 str — 根因确认
+- [ ] 服务器 `python train.py --config configs/debug.yaml` 正常启动训练
