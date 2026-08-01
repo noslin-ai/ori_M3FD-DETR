@@ -18,9 +18,15 @@ def set_seed(seed=42):
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
 
-    # 确保确定性
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    # 性能优化（RTX 5090 Blackwell SM 120）
+    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.deterministic = False
+
+    # TF32 加速矩阵乘法（Blackwell 原生 8x matmul 吞吐）
+    if hasattr(torch.backends.cuda.matmul, 'allow_tf32'):
+        torch.backends.cuda.matmul.allow_tf32 = True
+    if hasattr(torch.backends.cudnn, 'allow_tf32'):
+        torch.backends.cudnn.allow_tf32 = True
 
     print(f"  Random seed set to: {seed}")
 

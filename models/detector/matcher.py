@@ -1,6 +1,6 @@
 """Hungarian Matcher — 匈牙利匹配。
 
-DINO/DETR 训练的核心：将 300 个预测框与 N 个真实框进行一对一最优匹配。
+DINO/DETR 训练的核心：将 Nq 个预测框与 N 个真实框进行一对一最优匹配。
 
 匹配代价 = 分类代价 + L1 框代价 + GIoU 代价
 使用 scipy 的 linear_sum_assignment 求解二分图最小权匹配。

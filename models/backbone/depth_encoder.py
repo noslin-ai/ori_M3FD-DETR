@@ -1,6 +1,6 @@
 """Depth Encoder — 深度几何特征编码器。
 
-深度输入为 3 通道: depth + normal_x + normal_y
+深度输入为 3 通道: depth + gx + gy（几何梯度信息）
 使用 stride=2 的首层下采样编码几何信息。
 """
 

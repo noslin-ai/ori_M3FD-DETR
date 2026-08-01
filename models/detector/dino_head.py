@@ -1,13 +1,7 @@
-"""DINO Detection Head — 第一版检测头占位。
+"""DINO Detection Head — 旧版检测头（已废弃）。
 
-第三阶段将实现完整的 DINO Detector:
-    - Deformable Transformer Encoder
-    - Object Query
-    - Hungarian Matcher
-    - 分类 + 回归 + GIoU Loss
-    - bbox 输出转换
-
-当前为占位模块，用于验证模型管线可运行。
+注：当前项目使用 ``dino_detector.py`` 中的 ``DINODetector`` 作为主检测头。
+本模块 (``DINOHead``) 为早期占位实现，仅保留用于参考，不参与实际推理或训练。
 """
 
 import torch

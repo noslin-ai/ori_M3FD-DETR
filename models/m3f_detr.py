@@ -3,9 +3,9 @@
 网络架构:
     RGB ────► Swin-L Backbone ──► 多尺度特征 [P2, P3, P4, P5]
                                        │
-    IR ─────► Thermal Adapter ──► IR Feature (192ch)
+    IR ─────► Thermal Adapter ──► IR Feature (ch[0])
                                        │
-    Depth ──► Depth Encoder ────► Depth Feature (192ch)
+    Depth ──► Depth Encoder ────► Depth Feature (ch[0])
                                        │
                               ┌────────┼────────┐
                               │    CMFA Fusion   │
@@ -45,9 +45,10 @@ class M3F_DETR(nn.Module):
 
     Args:
         num_classes: 检测类别数（不含背景）
-        hidden_dim: 隐层维度
+        hidden_dim: 隐层维度（FPN输出+Transformer统一维度）
         num_queries: Object Query 数量
         use_dn: 是否使用 Denoising Query
+        backbone_name: Swin backbone 变体（swin_tiny/small/base/large）
     """
 
     def __init__(

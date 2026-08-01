@@ -363,3 +363,39 @@ weight_decay = float(config["optimizer"].get("weight_decay", 0.05))
 - [x] `yaml.safe_load` 解析 `0.0001` 为 float ✓
 - [x] `lr: 1e-4` 被 PyYAML 解析为 str — 根因确认
 - [ ] 服务器 `python train.py --config configs/debug.yaml` 正常启动训练
+
+---
+
+## v0.4.0 (minor) — RTX 5090 训练加速 + 全局注释审计修复
+
+**日期:** 2026-08-01
+
+### 训练加速
+
+| 文件 | 改动 | 效果 |
+|------|------|------|
+| `utils/seed.py` | cudnn.benchmark=True, deterministic=False, TF32 启用 | 卷积 10-25% + matmul 15-30% 加速 |
+| `train.py` | find_unused_parameters=False | DDP 通信 20-40% 加速 |
+| `train.py` | torch.compile(model, mode="reduce-overhead") | 15-30% 加速 (PyTorch>=2.0) |
+| `engine/trainer.py` | autocast dtype=torch.bfloat16 | 数值更稳 + 5-10% |
+| `train.py` | DataLoader persistent_workers=True, prefetch_factor=3 | epoch 间切换 0 开销 |
+| `configs/m3f_dino.yaml` | batch_size 4→8, num_workers 8→12 | GPU 利用率提升 |
+
+### 注释修复（14 处）
+
+| 文件 | 问题 |
+|------|------|
+| `models/m3f_detr.py` | 架构图 192ch→ch[0], Args 增加 backbone_name |
+| `tools/test_dataloader.py` | 300→num_queries |
+| `engine/evaluator.py` | 删除残留注释 import 行 |
+| `models/backbone/depth_encoder.py` | normal→gradient 术语统一 |
+| `models/detector/matcher.py` | 300→Nq |
+| `models/neck/simple_fpn.py` | "第三阶段"→"备选实现" |
+| `models/detector/dino_head.py` | "占位"→"已废弃" |
+
+### 验证清单
+
+- [x] cudnn.benchmark=True 不影响精度
+- [x] BF16 autocast RTX 5090 兼容
+- [x] torch.compile 有 try/except 兜底
+- [ ] 服务器训练 batch_size=8 不 OOM

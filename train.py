@@ -182,12 +182,14 @@ def main():
     train_loader = DataLoader(
         train_dataset,
         batch_size=config["train"]["batch_size"],
-        shuffle=(train_sampler is None),   # sampler 与 shuffle 互斥
+        shuffle=(train_sampler is None),
         sampler=train_sampler,
         num_workers=num_workers,
         collate_fn=collate_fn,
         pin_memory=True,
         drop_last=True,
+        persistent_workers=(num_workers > 0),
+        prefetch_factor=3,
     )
 
     val_loader = None
@@ -215,8 +217,18 @@ def main():
     if world_size > 1:
         model = nn.parallel.DistributedDataParallel(
             model, device_ids=[local_rank], output_device=local_rank,
-            find_unused_parameters=True,
+            find_unused_parameters=False,
         )
+
+    # torch.compile JIT 编译（PyTorch>=2.0, RTX 5090 Blackwell 优化）
+    if hasattr(torch, 'compile') and config.get("compile", True):
+        try:
+            model = torch.compile(model, mode="reduce-overhead")
+            if is_main:
+                print("  torch.compile: enabled (mode=reduce-overhead)")
+        except Exception:
+            if is_main:
+                print("  torch.compile: skipped (not supported)")
 
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)

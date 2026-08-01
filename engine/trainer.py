@@ -82,8 +82,8 @@ def train_one_epoch(
 
         optimizer.zero_grad()
 
-        # AMP 前向 + 损失
-        with autocast(enabled=use_amp):
+        # AMP 前向 + 损失（BF16 优于 FP16: 同指数范围无梯度溢出，RTX 5090 原生支持）
+        with autocast(enabled=use_amp, dtype=torch.bfloat16):
             outputs = model(rgb, ir, depth, targets)
             loss_dict = criterion(outputs, targets)
             loss = loss_dict["loss"]

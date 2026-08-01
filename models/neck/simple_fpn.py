@@ -1,8 +1,7 @@
 """Simple FPN — 轻量级多尺度特征金字塔。
 
-将 backbone 输出的 4 层多尺度特征进行融合，
-为检测头提供统一的多尺度表示。
-（第三阶段会与 DINO Head 一起完善）
+将 backbone 输出的 4 层多尺度特征进行融合，为检测头提供统一的多尺度表示。
+（注：当前主要使用 `MultiScaleFusion` 作为 FPN，`SimpleFPN` 保留作为备选实现。）
 """
 
 import torch

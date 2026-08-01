@@ -72,9 +72,9 @@ def test_model_forward():
         output = model(rgb, ir, depth)
 
     print(f"  pred_logits: {output['pred_logits'].shape}")
-    # 期望: (B, 300, 13) — 12 类 + 背景
+    # 期望: (B, num_queries, 13) — 12 类 + 背景
     print(f"  pred_boxes:  {output['pred_boxes'].shape}")
-    # 期望: (B, 300, 4) — cx, cy, w, h 归一化
+    # 期望: (B, num_queries, 4) — cx, cy, w, h 归一化
 
     print("  ✓ Model forward OK\n")
     return output

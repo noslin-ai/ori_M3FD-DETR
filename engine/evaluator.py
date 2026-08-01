@@ -11,7 +11,6 @@ import os
 import torch
 from torch.cuda.amp import autocast
 
-#from ..models.detector.matcher import box_cxcywh_to_xyxy
 from models.detector.matcher import box_cxcywh_to_xyxy
 
 

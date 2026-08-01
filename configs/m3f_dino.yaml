@@ -20,7 +20,7 @@ model:
 # ---- 训练 ----
 train:
   epochs: 300
-  batch_size: 4              # 4×4090: 4, A100 80G: 8
+  batch_size: 8              # RTX 5090 32G: 8, RTX 4090 24G: 4
   amp: true                  # 混合精度
   ema: true                  # EMA 模型平均
   ema_decay: 0.9999
@@ -75,4 +75,4 @@ log:
 # ---- 硬件 ----
 device: cuda
 seed: 42
-num_workers: 8
+num_workers: 12             # 25 vCPU: 12 workers, persistent_workers=True (train.py)
