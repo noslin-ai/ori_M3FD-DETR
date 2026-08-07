@@ -83,3 +83,4 @@ log:
 device: cuda
 seed: 42
 num_workers: 8               # 服务器上建议 8，Windows 本地用 0
+compiler: false                   # 是否使用 torch.compile 加速训练，Windows 下不支持

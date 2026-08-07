@@ -10,9 +10,9 @@ input:
   height: 384
 
 model:
-  backbone: swin_tiny
-  hidden_dim: 128
-  queries: 100
+  backbone: swin_large
+  hidden_dim: 256
+  queries: 900
 
 train:
   epochs: 5
