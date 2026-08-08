@@ -6,6 +6,58 @@
 
 ---
 
+## v0.6.0 (patch) — 训练"0 框 / mAP=0"根因闭环：五处修复 + 诊断工具 + 不平衡实验配置
+
+**日期:** 2026-08-08
+**目标:** 解决 rush 正式训练后验证 "预测 0 个框 / mAP=0"（错误 #8 复发），恢复可训练、可出框、可评估链路
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `models/detector/position_encoding.py` | 修复 | 位置编码 `mask = torch.zeros(...)` → `torch.ones(...)`：原实现坐标全 0，每个空间位置拿到相同编码，decoder 完全失去空间信息（首因） |
+| `models/backbone/rgb_backbone.py` | 修复 | `pretrained` 真正透传 `timm.create_model`（原来硬编码 False，rush 的 `pretrained: true` 从未生效）；新增本地权重路径支持（`pretrained=<path>`，兼容 safetensors/pth，适配无外网服务器） |
+| `models/detector/dino_detector.py` | 修复 | decoder 特征先过 `input_proj`（Conv+GroupNorm）归一化：FPN 输出 std≈8~11 淹没位置编码（≈0.1）且注意力 logits 饱和，训练中 query 互相塌缩、所有框相同 |
+| `models/losses/focal_loss.py` | 修复 | 分类损失 `loss.mean()` → `loss.sum(-1).mean()`：原实现平均到 900×13 个元素，分类梯度被稀释约 11700 倍，模型只学框不学分类，最终全背景 |
+| `engine/evaluator.py` | 修复 | ① 后处理 softmax→sigmoid，与 sigmoid Focal 训练目标对齐；② 最终版"含背景类全类 argmax + 阈值"，背景胜出的 query 直接丢弃；③ per-class COCOeval 空 stats 崩溃保护 |
+| `inference.py` | 修复 | 同 evaluator 后处理（sigmoid + 含背景 argmax + 阈值） |
+| `configs/rush.yaml` | 注释 | 补充 pretrained 本地路径用法 |
+| `configs/rush_v2.yaml` | 新增 | 类别不平衡实验配置：queries 900→300、focal_alpha 0.25→0.5（待验证） |
+| `tools/diagnose_predictions.py` | 新增 | 诊断：逐类 logits 均值、softmax 背景占比、sigmoid 置信度分布（raw vs EMA） |
+| `tools/probe_forward.py` | 新增 | 前向探针：逐环节方差定位塌缩（backbone/FPN/PE/query/decoder/logits/box），含 [DEP] 依赖测试与 [BOX] 图像依赖检测 |
+
+### 根因链（错误 #8 闭环）
+
+1. **位置编码失效**：`cumsum(zeros)` 导致所有空间位置编码相同 → decoder 无空间信息
+2. **pretrained 未生效**：`timm.create_model` 硬编码 `pretrained=False` → Swin-Tiny 全程随机初始化
+3. **特征未归一化**：`input_proj` 已定义但从未接线；FPN 输出 std≈8~11 淹没位置信号、注意力饱和 → 训练 5 轮内 query 塌缩（所有 query 输出相同 logits/框）
+4. **分类损失被稀释**：`FocalLoss.mean()` 平均到 900×13 元素，分类梯度远小于 box 梯度 → 只学框不学分类 → 全背景（bg logit +1.5、目标类 -3）
+5. **后处理不匹配**：softmax+argmax 与 sigmoid Focal 不兼容，且早期版本忽略背景类竞争
+
+### 验证记录（服务器实测）
+
+- 随机权重探针：decoder query_std=0.2375（架构健康）
+- 修复前旧 checkpoint：decoder query_std=0.000006、[DEP] 随 query 变化 0.000006、[BOX] 全 query 相同
+- input_proj 修复后重训（epoch 20）：decoder query_std=0.50、[BOX] query_std=0.184（塌缩解决）
+- focal 修复后重训：epoch 10 验证 2143 框（数量级正确，mAP 仍 0）；epoch 20 又塌回 0 框（类别不平衡，见遗留）
+
+### 验证清单
+
+- [x] 本地 `py_compile` 通过（evaluator/inference/focal_loss/dino_detector/rgb_backbone/position_encoding/probe/diagnose）
+- [x] 服务器探针确认 decoder 塌缩解决（query_std 0.50）
+- [x] v0.5.0 遗留项"前 20 epoch val mAP > 0"已推进：从 0 框 → 2143 框，但 mAP 仍为 0
+- [ ] `rush_v2` 重训 10~20 轮：验证框数正常且 mAP > 0（当前遗留）
+
+### 遗留问题（接力必读）
+
+1. **类别极端不平衡**：900 queries vs 约 7 GT/图（约 126:1），分类在"全背景"吸引子与"乱出框"之间摆动。实验配置 `rush_v2`（300 queries + alpha 0.5）待验证。
+2. **框的图像依赖未确认**：探针 `[BOX] img1_vs_img2_diff` 待跑；若 ≈0 说明框仍是模板，需将 decoder 改为标准 DETR 接法（tgt=zeros + query_embed 作为 query_pos 逐层加入），并考虑多尺度特征（当前 decoder 只用 P5 单尺度）。
+3. **训练分辨率**：backbone 硬编码 `img_size=(384, 640)`，数据集实际输出 384×640；配置 `input.width/height: 1024×640` 未生效。提分辨率需同步改 backbone 与数据集。
+4. **best.pth 仅在 mAP>0 时保存**：当前一直为 0 所以只有 latest.pth；评估/推理请用 latest.pth。
+5. **AMP FutureWarning**：`torch.cuda.amp.autocast` 弃用警告，低优先级（可换 `torch.amp.autocast("cuda", ...)`）。
+
+---
+
 ## v0.5.0 (minor) — 快速出分改造：pretrained 开关 + 训练可靠性修复 + rush 配置
 
 **日期:** 2026-08-08  
