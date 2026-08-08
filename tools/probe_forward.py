@@ -37,7 +37,7 @@ def main():
 
     device = args.device if torch.cuda.is_available() else "cpu"
     torch.manual_seed(0)
-    B, H, W = 2, 640, 1024
+    B = 2
 
     cfg = {}
     if args.checkpoint:
@@ -57,16 +57,15 @@ def main():
     if args.checkpoint:
         model.load_state_dict(strip_state_dict_prefixes(state["model"]))
 
-    # 1) 位置编码是否退化（每个位置是否相同）
-    pe = PositionEmbeddingSine(model.hidden_dim // 2).to(device)
-    probe = torch.randn(B, model.hidden_dim, 20, 32, device=device)
-    pos = pe(probe)
-    print(f"[PE]        shape={tuple(pos.shape)} spatial_std={spatial_std(pos):.6f}"
-          "  <- 若≈0，位置编码塌缩")
+    # 输入尺寸必须与 backbone 的 img_size 一致（timm 会断言 H/W）
+    img_h, img_w = getattr(
+        model.rgb_backbone.backbone, "img_size", (384, 640)
+    )
+    print(f"Input size: {img_h} x {img_w}")
 
-    img = torch.randn(B, 3, H, W, device=device)
-    ir = torch.randn(B, 3, H, W, device=device)
-    depth = torch.randn(B, 3, H, W, device=device)
+    img = torch.randn(B, 3, img_h, img_w, device=device)
+    ir = torch.randn(B, 3, img_h, img_w, device=device)
+    depth = torch.randn(B, 3, img_h, img_w, device=device)
 
     # 2) backbone 各层特征的空间方差
     feats = model.rgb_backbone(img)
@@ -82,6 +81,12 @@ def main():
     for i, f in enumerate(fpn_out):
         print(f"[FPN]       out{i} shape={tuple(f.shape)} "
               f"spatial_std={spatial_std(f):.6f}")
+
+    # 1) 位置编码是否退化（每个位置是否相同），用 decoder 实际输入的特征尺寸
+    pe = PositionEmbeddingSine(model.hidden_dim // 2).to(device)
+    pos = pe(fpn_out[-1])
+    print(f"[PE]        shape={tuple(pos.shape)} spatial_std={spatial_std(pos):.6f}"
+          "  <- 若≈0，位置编码塌缩")
 
     # 4) query embedding 行间方差
     det = model.detector
