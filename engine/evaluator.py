@@ -15,7 +15,7 @@ from models.detector.matcher import box_cxcywh_to_xyxy
 
 
 @torch.no_grad()
-def evaluate_model(model, loader, device, use_amp=True):
+def evaluate_model(model, loader, device, use_amp=True, conf_threshold=0.3):
     """模型推理验证。
 
     Args:
@@ -23,6 +23,7 @@ def evaluate_model(model, loader, device, use_amp=True):
         loader: 验证集 DataLoader
         device: cuda / cpu
         use_amp: 是否使用混合精度
+        conf_threshold: 置信度阈值（sigmoid），低于该值的预测被过滤
 
     Returns:
         predictions: list of dict（COCO 格式预测）
@@ -49,16 +50,15 @@ def evaluate_model(model, loader, device, use_amp=True):
             image_id = batch_targets[i].get("image_id", torch.tensor([i])).item()
             img_h, img_w = rgb.shape[2], rgb.shape[3]
 
-            # 预测: softmax → top-k → 过滤背景
-            scores = pred_logits[i].softmax(-1)  # (Q, C+1)
-            labels = scores.argmax(-1)            # (Q,)
-            confs = scores.max(-1).values         # (Q,)
+            # 预测: sigmoid → 去掉背景类 → 置信度阈值（与 Focal Loss 训练目标一致）
+            probs = pred_logits[i].sigmoid()      # (Q, C+1)
+            obj_probs = probs[:, :-1]             # 去掉背景类
+            confs, labels = obj_probs.max(-1)     # (Q,), (Q,)
 
-            # 过滤背景类（类别 == num_classes）
-            bg_mask = labels < (scores.shape[1] - 1)
-            confs = confs[bg_mask]
-            labels = labels[bg_mask]
-            boxes = pred_boxes[i][bg_mask]
+            keep = confs > conf_threshold
+            confs = confs[keep]
+            labels = labels[keep]
+            boxes = pred_boxes[i][keep]
 
             # cxcywh → xywh (COCO format, pixel coords)
             cx, cy, w, h = boxes.unbind(-1)
@@ -185,7 +185,7 @@ def compute_map(predictions, targets, num_classes=12):
     return results
 
 
-def validate(model, loader, device, num_classes=12, use_amp=True):
+def validate(model, loader, device, num_classes=12, use_amp=True, conf_threshold=0.3):
     """完整验证流程：推理 + mAP 计算。
 
     Args:
@@ -199,7 +199,7 @@ def validate(model, loader, device, num_classes=12, use_amp=True):
         dict: mAP 结果
     """
     print("  开始验证...")
-    predictions, targets = evaluate_model(model, loader, device, use_amp)
+    predictions, targets = evaluate_model(model, loader, device, use_amp, conf_threshold)
     print(f"  预测 {len(predictions)} 个框, GT {len(targets)} 个框")
 
     results = compute_map(predictions, targets, num_classes)

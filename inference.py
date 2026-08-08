@@ -70,13 +70,12 @@ def generate_submission(
         pred_boxes = output["pred_boxes"]      # (B, Q, 4)
 
         for i in range(B):
-            # Softmax + 过滤背景
-            scores = pred_logits[i].softmax(-1)       # (Q, C+1)
-            max_scores, labels = scores.max(dim=-1)   # (Q,), (Q,)
+            # Sigmoid + 去掉背景类 + 置信度阈值（与 Focal Loss 训练目标一致）
+            probs = pred_logits[i].sigmoid()          # (Q, C+1)
+            obj_probs = probs[:, :-1]                 # 去掉背景类
+            max_scores, labels = obj_probs.max(dim=-1)  # (Q,), (Q,)
 
-            # 过滤低置信度和背景类
-            num_classes = scores.shape[1] - 1
-            valid = (labels < num_classes) & (max_scores > conf_threshold)
+            valid = max_scores > conf_threshold
             valid_labels = labels[valid]               # (K,)
             valid_scores = max_scores[valid]           # (K,)
             valid_boxes = pred_boxes[i][valid]         # (K, 4)
