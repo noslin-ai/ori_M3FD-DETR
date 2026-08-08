@@ -95,7 +95,7 @@ def main():
           "  <- 若≈0，query 已互相塌缩")
 
     # 5) decoder 输出跨 query 方差
-    src = fpn_out[-1]
+    src = det.input_proj[0](fpn_out[-1])   # 与模型实际 forward 一致
     pos_emb = det.position_embedding(src)
     src_flat = src.flatten(2).permute(2, 0, 1)      # (HW, B, C)
     pos_flat = pos_emb.flatten(2).permute(2, 0, 1)  # (HW, B, C)

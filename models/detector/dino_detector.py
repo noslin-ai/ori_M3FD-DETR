@@ -116,7 +116,9 @@ class DINODetector(nn.Module):
                 dn_results: (可选) DN 相关的输出
         """
         # 取最后一层（最高层）做 position encoding
-        feat_flat = features[-1]  # (B, C, H, W)
+        # input_proj: Conv + GroupNorm 归一化特征，避免大数值淹没位置编码、
+        # 注意力 logits 饱和导致训练中 query 互相塌缩
+        feat_flat = self.input_proj[0](features[-1])  # (B, C, H, W)
         pos_embed = self.position_embedding(feat_flat)  # (B, C, H, W)
         assert pos_embed.shape[1] == self.hidden_dim, (
             f"位置编码输出 {pos_embed.shape[1]} 通道 ≠ hidden_dim {self.hidden_dim}。"
