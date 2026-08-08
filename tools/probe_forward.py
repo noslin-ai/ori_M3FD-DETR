@@ -123,12 +123,14 @@ def main():
           f"img1_vs_img2_diff={(lg1 - lg2).abs().mean().item():.6f}"
           "  <- 后者≈0 则输出与输入无关")
 
-    # 7) 框：跨 query 是否塌缩 + 框的均值位置/尺寸
+    # 7) 框：跨 query 是否塌缩 + 是否依赖图像内容 + 均值位置/尺寸
     bx1 = out1["pred_boxes"]
+    bx2 = out2["pred_boxes"]
     print(f"[BOX]       query_std={bx1.std(dim=1).mean().item():.6f} "
+          f"img1_vs_img2_diff={(bx1 - bx2).abs().mean().item():.6f} "
           f"cx={bx1[:, :, 0].mean().item():.3f} cy={bx1[:, :, 1].mean().item():.3f} "
           f"w={bx1[:, :, 2].mean().item():.3f} h={bx1[:, :, 3].mean().item():.3f}"
-          "  <- query_std≈0 则所有框相同")
+          "  <- query_std≈0 则所有框相同; img_diff≈0 则框不随图像变化(模板)")
 
 
 if __name__ == "__main__":
