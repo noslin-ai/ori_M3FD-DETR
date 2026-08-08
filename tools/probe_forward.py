@@ -109,6 +109,12 @@ def main():
           f"query_std={hs.std(dim=1).mean().item():.6f}"
           "  <- 若≈0，decoder 输出对 query 塌缩")
 
+    # 5b) 依赖测试：输出是否真的依赖 query / memory
+    hs_mem2 = det.transformer(tgt, src_flat + 1.0, pos_flat, q_emb)[-1].transpose(0, 1)
+    hs_q2 = det.transformer(tgt, src_flat, pos_flat, torch.zeros_like(q_emb))[-1].transpose(0, 1)
+    print(f"[DEP]       hs 随 memory 变化: {(hs - hs_mem2).abs().mean().item():.6f} "
+          f"| hs 随 query 变化: {(hs - hs_q2).abs().mean().item():.6f}")
+
     # 6) 最终 logits：跨 query 方差 + 不同输入是否产生不同输出
     out1 = model(img, ir, depth)
     out2 = model(img + 1.0, ir + 1.0, depth + 1.0)
