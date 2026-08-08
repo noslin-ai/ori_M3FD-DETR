@@ -32,7 +32,7 @@ class RGBBackbone(nn.Module):
 
         self.backbone = timm.create_model(
             model_name,
-            pretrained=False,
+            pretrained=pretrained,
             features_only=True,
             img_size=(384, 640),
         )

@@ -37,9 +37,9 @@ class PositionEmbeddingSine(nn.Module):
         B, _, H, W = x.shape
 
         # 归一化坐标到 [0, 2*pi]
-        mask = torch.zeros(B, H, W, device=x.device, dtype=torch.float32)
-        y_embed = mask.cumsum(1)
-        x_embed = mask.cumsum(2)
+        not_mask = torch.ones(B, H, W, device=x.device, dtype=torch.float32)
+        y_embed = not_mask.cumsum(1, dtype=torch.float32)
+        x_embed = not_mask.cumsum(2, dtype=torch.float32)
 
         eps = 1e-6
         y_embed = y_embed / (y_embed[:, -1:, :] + eps) * 2 * torch.pi
