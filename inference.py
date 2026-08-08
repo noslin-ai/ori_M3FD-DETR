@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from datasets.rgb_ir_depth_dataset import RGBIRDepthDataset
 from models.m3f_detr import M3F_DETR
-from utils.checkpoint import _safe_torch_load
+from utils.checkpoint import _safe_torch_load, strip_state_dict_prefixes
 
 
 @torch.no_grad()
@@ -182,7 +182,8 @@ def main():
         hidden_dim=hidden_dim,
         num_queries=num_queries,
         backbone_name=backbone_name,
-        use_dn=True,  # 与训练 checkpoint 结构对齐
+        # 从 checkpoint 恢复 use_dn；旧 checkpoint 无该字段时回退 True 以兼容
+        use_dn=cfg.get("use_dn", True),
     ).to(device)
 
     # 加载权重（如果是 CPU 加载的 state 需确保到 device）
@@ -192,13 +193,13 @@ def main():
 
     if args.use_ema and "ema" in state and state.get("ema"):
         print("  Using EMA weights")
-        model.load_state_dict(state["ema"])
+        model.load_state_dict(strip_state_dict_prefixes(state["ema"]))
     elif "model" in state:
-        model.load_state_dict(state["model"])
+        model.load_state_dict(strip_state_dict_prefixes(state["model"]))
     else:
         # 移除 cfg 后再加载
         state_to_load = {k: v for k, v in state.items() if k != "cfg"}
-        model.load_state_dict(state_to_load)
+        model.load_state_dict(strip_state_dict_prefixes(state_to_load))
 
     model.eval()
 

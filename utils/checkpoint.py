@@ -19,6 +19,26 @@ def _safe_torch_load(path, map_location="cpu"):
         return torch.load(path, map_location=map_location)
 
 
+def strip_state_dict_prefixes(state_dict, prefixes=("_orig_mod.", "module.")):
+    """移除 torch.compile / DDP 引入的参数名前缀，保证 checkpoint 与裸模型互操作。
+
+    torch.compile 会使 state_dict 键名带 `_orig_mod.` 前缀，DDP 会带 `module.` 前缀，
+    裸模型 strict=True 加载时都会失败。保存/加载统一剥离，避免"训练完无法推理"。
+    """
+    cleaned = {}
+    for k, v in state_dict.items():
+        nk = k
+        changed = True
+        while changed:
+            changed = False
+            for prefix in prefixes:
+                if nk.startswith(prefix):
+                    nk = nk[len(prefix):]
+                    changed = True
+        cleaned[nk] = v
+    return cleaned
+
+
 def save_checkpoint(
     model,
     optimizer,
@@ -46,7 +66,7 @@ def save_checkpoint(
         cfg: 模型配置 dict (可选，推荐保存以便推理时自动恢复)
     """
     state = {
-        "model": model.state_dict(),
+        "model": strip_state_dict_prefixes(model.state_dict()),
         "optimizer": optimizer.state_dict(),
         "epoch": epoch,
     }
@@ -54,7 +74,8 @@ def save_checkpoint(
     if scaler is not None:
         state["scaler"] = scaler.state_dict()
     if ema is not None:
-        state["ema"] = ema.state_dict() if hasattr(ema, "state_dict") else None
+        ema_sd = ema.state_dict() if hasattr(ema, "state_dict") else None
+        state["ema"] = strip_state_dict_prefixes(ema_sd) if ema_sd is not None else None
     if loss is not None:
         state["loss"] = loss
     if best_metric is not None:
@@ -100,11 +121,11 @@ def load_checkpoint(
 
     state = _safe_torch_load(path, map_location=device)
 
-    # 加载模型
+    # 加载模型（剥离 compile/DDP 前缀，兼容裸模型）
     if "model" in state:
-        model.load_state_dict(state["model"])
+        model.load_state_dict(strip_state_dict_prefixes(state["model"]))
     else:
-        model.load_state_dict(state)
+        model.load_state_dict(strip_state_dict_prefixes(state))
 
     # 加载优化器
     if optimizer is not None and "optimizer" in state:
@@ -124,7 +145,7 @@ def load_checkpoint(
     if ema is not None and "ema" in state and state.get("ema"):
         try:
             if hasattr(ema, "load_state_dict"):
-                ema.load_state_dict(state["ema"])
+                ema.load_state_dict(strip_state_dict_prefixes(state["ema"]))
         except Exception as e:
             print(f"  ⚠ EMA 状态恢复失败: {e}")
 

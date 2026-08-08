@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from datasets.rgb_ir_depth_dataset import RGBIRDepthDataset
 from models.m3f_detr import M3F_DETR
 from engine import evaluate_model, validate, collate_fn
-from utils.checkpoint import _safe_torch_load
+from utils.checkpoint import _safe_torch_load, strip_state_dict_prefixes
 
 
 def main():
@@ -91,6 +91,8 @@ def main():
         hidden_dim=hidden_dim,
         num_queries=num_queries,
         backbone_name=backbone_name,
+        # 从 checkpoint 恢复 use_dn；旧 checkpoint 无该字段时回退 True 以兼容
+        use_dn=cfg.get("use_dn", True),
     ).to(device)
 
     # 加载权重（已在上面加载过一次用于读取 cfg）
@@ -103,14 +105,14 @@ def main():
     # 使用 EMA 权重
     if args.use_ema and "ema" in state and state.get("ema"):
         print("  使用 EMA 权重")
-        model.load_state_dict(state["ema"])
+        model.load_state_dict(strip_state_dict_prefixes(state["ema"]))
     else:
         print("  使用普通权重")
         if "model" in state:
-            model.load_state_dict(state["model"])
+            model.load_state_dict(strip_state_dict_prefixes(state["model"]))
         else:
             state_to_load = {k: v for k, v in state.items() if k != "cfg"}
-            model.load_state_dict(state_to_load)
+            model.load_state_dict(strip_state_dict_prefixes(state_to_load))
 
     model.eval()
 

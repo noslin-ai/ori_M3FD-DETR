@@ -212,6 +212,8 @@ def main():
         hidden_dim=config["model"]["hidden_dim"],
         num_queries=config["model"]["queries"],
         backbone_name=config["model"].get("backbone", "swin_large"),
+        use_dn=config["model"].get("use_dn", False),
+        pretrained=config["model"].get("pretrained", False),
     ).to(device)
 
     if world_size > 1:
@@ -221,7 +223,9 @@ def main():
         )
 
     # torch.compile JIT 编译（PyTorch>=2.0, RTX 5090 Blackwell 优化）
-    if hasattr(torch, 'compile') and config.get("compile", True):
+    # 默认关闭：编译后 state_dict 键名可能带 `_orig_mod.` 前缀导致推理加载失败，
+    # 确认 checkpoint 兼容（utils/checkpoint.py 已做前缀剥离）后再按需开启 compile: true
+    if hasattr(torch, 'compile') and config.get("compile", False):
         try:
             model = torch.compile(model, mode="reduce-overhead")
             if is_main:
@@ -242,6 +246,7 @@ def main():
         "hidden_dim": config["model"]["hidden_dim"],
         "num_queries": config["model"]["queries"],
         "num_classes": config["dataset"]["num_classes"],
+        "use_dn": config["model"].get("use_dn", False),
     }
 
     # ---- 损失 ----

@@ -49,6 +49,7 @@ class M3F_DETR(nn.Module):
         num_queries: Object Query 数量
         use_dn: 是否使用 Denoising Query
         backbone_name: Swin backbone 变体（swin_tiny/small/base/large）
+        pretrained: 是否加载 ImageNet 预训练权重（仅影响初始化，推理时由 checkpoint 覆盖）
     """
 
     def __init__(
@@ -58,6 +59,7 @@ class M3F_DETR(nn.Module):
         num_queries=900,
         use_dn=True,
         backbone_name="swin_small",
+        pretrained=False,
     ):
         super().__init__()
 
@@ -65,7 +67,7 @@ class M3F_DETR(nn.Module):
         self.hidden_dim = hidden_dim
 
         # ---- 模态编码器 ----
-        self.rgb_backbone = RGBBackbone(backbone_name=backbone_name, pretrained=False)
+        self.rgb_backbone = RGBBackbone(backbone_name=backbone_name, pretrained=pretrained)
 
         # 从 backbone 获取各层通道数（由 timm feature_info 提供，已通过 NHWC→NCHW 转换验证）
         backbone_channels = self.rgb_backbone.channels

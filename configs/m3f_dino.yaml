@@ -30,7 +30,7 @@ train:
   stages:
     - name: "freeze_backbone"
       epochs: 50
-      freeze: ["rgb"]
+      freeze: ["rgb_backbone"]
       lr: 1e-4
     - name: "full_train"
       epochs: 250

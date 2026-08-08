@@ -30,7 +30,7 @@ train:
   stages:
     - name: "stage1_freeze_backbone"
       epochs: 50
-      freeze: ["rgb"]
+      freeze: ["rgb_backbone"]
       lr: 1e-4
 
     - name: "stage2_partial_unfreeze"
@@ -83,4 +83,4 @@ log:
 device: cuda
 seed: 42
 num_workers: 8               # 服务器上建议 8，Windows 本地用 0
-compiler: false                   # 是否使用 torch.compile 加速训练，Windows 下不支持
+compile: false               # 是否使用 torch.compile 加速训练（默认关闭，确认 checkpoint 兼容后开启）

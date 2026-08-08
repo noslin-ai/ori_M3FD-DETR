@@ -1,0 +1,77 @@
+# Rush 快速出分配置 — 尽快产出一版可提交、非零 mAP 的结果
+# 使用方式: python train.py --config configs/rush.yaml --fold 1
+# 说明: 预训练 Swin-Tiny + 中等分辨率 + 60 epoch，先跑通提交，再考虑冲精度
+
+# ---- 数据集 ----
+dataset:
+  root: data/train
+  num_classes: 12
+
+# ---- 输入 ----
+input:
+  width: 1024
+  height: 640
+
+# ---- 模型 ----
+model:
+  backbone: swin_tiny
+  pretrained: true           # 加载 ImageNet 预训练权重（首次运行会自动下载）
+  hidden_dim: 256
+  queries: 900
+  use_dn: false              # DN 分支暂无有效监督，先关闭以省显存/计算
+
+# ---- 训练 ----
+train:
+  epochs: 60
+  batch_size: 8              # RTX 5090 32G: 8；OOM 则降到 4 或降分辨率
+  amp: true
+  ema: true
+  ema_decay: 0.9999
+  grad_clip: 0.1
+  stages:
+    - name: "finetune_all"
+      epochs: 60
+      freeze: []
+      lr: 0.0001
+
+# ---- 优化器 ----
+optimizer:
+  name: AdamW
+  lr: 0.0001
+  backbone_lr: 0.00001
+  weight_decay: 0.05
+
+# ---- 学习率调度 ----
+scheduler:
+  type: warmup_cosine
+  warmup_epochs: 5
+
+# ---- 损失 ----
+loss:
+  cost_class: 2.0
+  cost_bbox: 5.0
+  cost_giou: 2.0
+  focal_alpha: 0.25
+  focal_gamma: 2.0
+
+# ---- 5-Fold ----
+cv:
+  num_folds: 5
+  split_dir: splits
+
+# ---- Checkpoint ----
+checkpoint:
+  save_dir: checkpoints/rush
+  save_freq: 5
+  best_metric: mAP50-95
+
+# ---- 日志 ----
+log:
+  log_interval: 50
+  tensorboard: false
+
+# ---- 硬件 ----
+device: cuda
+seed: 42
+num_workers: 12
+compile: false               # 首版先关闭，避免 checkpoint 键名兼容风险
