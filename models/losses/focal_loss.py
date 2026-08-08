@@ -54,5 +54,7 @@ class FocalLoss(nn.Module):
             logits, targets, reduction="none"
         )
 
-        loss = alpha * focal_weight * bce
-        return loss.mean()
+        loss = alpha * focal_weight * bce   # (N, C)
+        # 按 query 汇总 13 个类别再取平均，避免被 num_queries×num_classes 稀释，
+        # 否则分类梯度远小于 box 梯度，模型只学框不学分类
+        return loss.sum(-1).mean()
