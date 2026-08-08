@@ -1,0 +1,77 @@
+# Rush v2 —— 缓解类别不平衡导致的全背景塌缩
+# 改动: queries 900→300（降低负样本占比）、focal_alpha 0.25→0.5（增强正样本信号）
+# 用法: python train.py --config configs/rush_v2.yaml --fold 1
+
+# ---- 数据集 ----
+dataset:
+  root: data/train
+  num_classes: 12
+
+# ---- 输入 ----
+input:
+  width: 1024
+  height: 640
+
+# ---- 模型 ----
+model:
+  backbone: swin_tiny
+  pretrained: true           # true=从 HuggingFace 下载；服务器无外网时改为本地路径
+  hidden_dim: 256
+  queries: 300               # 900→300：负样本从 ~126:1 降到 ~42:1
+  use_dn: false
+
+# ---- 训练 ----
+train:
+  epochs: 60
+  batch_size: 8
+  amp: true
+  ema: true
+  ema_decay: 0.9999
+  grad_clip: 0.1
+  stages:
+    - name: "finetune_all"
+      epochs: 60
+      freeze: []
+      lr: 0.0001
+
+# ---- 优化器 ----
+optimizer:
+  name: AdamW
+  lr: 0.0001
+  backbone_lr: 0.00001
+  weight_decay: 0.05
+
+# ---- 学习率调度 ----
+scheduler:
+  type: warmup_cosine
+  warmup_epochs: 5
+
+# ---- 损失 ----
+loss:
+  cost_class: 2.0
+  cost_bbox: 5.0
+  cost_giou: 2.0
+  focal_alpha: 0.5           # 0.25→0.5：增强正样本梯度，抵抗负样本压制
+  focal_gamma: 2.0
+
+# ---- 5-Fold ----
+cv:
+  num_folds: 5
+  split_dir: splits
+
+# ---- Checkpoint ----
+checkpoint:
+  save_dir: checkpoints/rush_v2
+  save_freq: 5
+  best_metric: mAP50-95
+
+# ---- 日志 ----
+log:
+  log_interval: 50
+  tensorboard: false
+
+# ---- 硬件 ----
+device: cuda
+seed: 42
+num_workers: 12
+compile: false
