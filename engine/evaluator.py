@@ -173,13 +173,17 @@ def compute_map(predictions, targets, num_classes=12):
         "per_class": {},
     }
 
-    # 每个类别的 AP
+    # 每个类别的 AP（某类无预测或无标注时 stats 可能为空，跳过避免崩溃）
     for cat_id in range(num_classes):
         coco_eval_cls = COCOeval(coco_gt, coco_dt, "bbox")
         coco_eval_cls.params.catIds = [cat_id]
-        coco_eval_cls.evaluate()
-        coco_eval_cls.accumulate()
-        results["per_class"][cat_id] = coco_eval_cls.stats[0]
+        try:
+            coco_eval_cls.evaluate()
+            coco_eval_cls.accumulate()
+            stats_cls = coco_eval_cls.stats
+        except Exception:
+            stats_cls = []
+        results["per_class"][cat_id] = stats_cls[0] if len(stats_cls) > 0 else 0.0
 
     os.unlink(gt_path)
     return results
