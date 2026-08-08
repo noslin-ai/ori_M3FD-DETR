@@ -6,6 +6,40 @@
 
 ---
 
+## v0.5.0 (minor) — 快速出分改造：pretrained 开关 + 训练可靠性修复 + rush 配置
+
+**日期:** 2026-08-08  
+**目标:** 尽快产出一版可提交、非零 mAP 的结果（先出分，再冲精度）
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `models/m3f_detr.py` | 增强 | `M3F_DETR` 新增 `pretrained` 参数并透传 `RGBBackbone`，支持加载 ImageNet 预训练权重 |
+| `train.py` | 修复 | ① `use_dn` 默认关闭并写入 checkpoint cfg；② `compile` 默认关闭（避免 `_orig_mod.` 键名导致推理加载失败）；③ 模型按 `config.model.use_dn / pretrained` 创建 |
+| `inference.py` / `evaluate.py` | 修复 | `use_dn` 从 checkpoint cfg 读取（`cfg.get("use_dn", True)` 兼容旧 checkpoint）；加载时剥离 `_orig_mod.` / `module.` 前缀 |
+| `utils/checkpoint.py` | 加固 | 新增 `strip_state_dict_prefixes()`，保存/加载统一剥离 compile/DDP 前缀，保证 checkpoint 与裸模型互操作 |
+| `configs/m3f_dino.yaml` / `configs/train.yaml` | 修复 | `freeze: ["rgb"]` → `["rgb_backbone"]`（原冻结阶段因模块名不匹配从未生效）；`train.yaml` 的 `compiler` 键名统一为 `compile` |
+| `configs/rush.yaml` | 新增 | 快速出分配置：swin_tiny + pretrained + 1024×640 + 60 epochs + EMA + compile off |
+
+### 背景与说明
+
+- **冻结 backbone 阶段此前是静默 no-op**：配置文件写 `freeze: ["rgb"]`，但模型属性名为 `rgb_backbone`，`hasattr` 永远不命中，第一阶段"冻结 RGB"从未执行。
+- **use_dn 分支无有效监督**：DN query 在进分类头前被 `dn_post_process` 切除，训练损失用的是原始 targets，DN 拿不到任何梯度，只是白占参数和计算。统一关闭，训练/推理结构由 checkpoint cfg 驱动保持一致。
+- **torch.compile 默认关闭**：编译后 state_dict 键名可能带 `_orig_mod.` 前缀，裸模型 strict 加载会失败。`utils/checkpoint.py` 已加前缀剥离做兜底，确认"compile 训练 → inference 加载"链路 OK 后可按需开启 `compile: true`。
+- **pretrained 只影响初始化**：推理时权重由 checkpoint 覆盖，因此不需要在推理侧配置。
+
+### 验证清单
+
+- [x] 本地 `py_compile` 通过（train/inference/evaluate/m3f_detr/checkpoint）
+- [ ] 服务器 `git pull` 后 `python -m py_compile` 通过
+- [ ] `python tools/split_5fold.py --data-root data/train` 生成 splits
+- [ ] `python train.py --config configs/rush.yaml --fold 1` 前向/反向正常、loss 下降
+- [ ] 前 20 epoch val mAP > 0
+- [ ] `python inference.py --checkpoint checkpoints/rush/best.pth --data-root data/test --output submission_rush` 生成 1000 个文件且非空
+
+---
+
 ## v0.3.3 (patch) — 修复 Transformer 接口对齐
 
 **日期:** 2026-07-30  
