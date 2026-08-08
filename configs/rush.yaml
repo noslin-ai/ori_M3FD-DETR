@@ -15,7 +15,8 @@ input:
 # ---- 模型 ----
 model:
   backbone: swin_tiny
-  pretrained: true           # 加载 ImageNet 预训练权重（首次运行会自动下载）
+  pretrained: true           # true=从 HuggingFace 下载；服务器无外网时改为本地路径
+  # pretrained: /root/autodl-tmp/aic_race/swin_tiny_patch4_window7_224.ms_in1k/model.safetensors
   hidden_dim: 256
   queries: 900
   use_dn: false              # DN 分支暂无有效监督，先关闭以省显存/计算
