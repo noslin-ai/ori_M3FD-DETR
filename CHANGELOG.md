@@ -6,6 +6,56 @@
 
 ---
 
+## v0.6.1 (audit) — 按队长交接报告对齐代码：确认 v0.6.0 五处根因修复未被覆盖
+
+**日期:** 2026-08-09  
+**目标:** 以队长交接报告为准，先恢复并核验 v0.6.0 “0 框 / mAP=0”根因闭环代码，避免未验证的结构显存优化实验覆盖已闭环的关键修复。
+
+### 本轮处理原则
+
+1. **先修 bug 闭环，再做结构实验**：本轮不混入 P2/P3-P5 融合结构调整，优先保证队长已验证的训练链路修复保持完整。
+2. **不新增 Word 报告**：修改说明直接写入 `CHANGELOG.md` 和 `项目问题分析报告.md`。
+3. **保留 v0.6.0 baseline**：后续训练应先跑 `configs/rush_v2.yaml`，确认类别不平衡实验结果，再单独开分支做显存优化结构 A/B。
+
+### 已核验的五处根因修复
+
+| 根因 | 文件 | 当前状态 |
+|------|------|:--:|
+| 位置编码失效：`cumsum(zeros)` 导致所有位置编码相同 | `models/detector/position_encoding.py` | 已确认使用 `torch.ones(...)` 后再 `cumsum` |
+| `pretrained` 被忽略，rush 配置预训练从未生效 | `models/backbone/rgb_backbone.py` | 已确认 `pretrained` 透传 `timm.create_model`，并支持本地 `.safetensors/.pth` 权重路径 |
+| decoder 输入特征未归一化，FPN 大方差淹没位置编码 | `models/detector/dino_detector.py` | 已确认 `features[-1]` 先经过 `input_proj[0]`（Conv + GroupNorm）再进入 position encoding / decoder |
+| 分类梯度被稀释，模型只学框不学分类 | `models/losses/focal_loss.py` | 已确认 `return loss.sum(-1).mean()`，按 query 汇总类别维度 |
+| 后处理与 sigmoid Focal 训练目标不匹配 | `engine/evaluator.py` / `inference.py` | 已确认使用 `sigmoid + 含背景全类 max/argmax + 过滤背景类 + 置信度阈值` |
+
+### 同步确认的工具与配置
+
+| 文件 | 状态 |
+|------|------|
+| `tools/probe_forward.py` | 保持队长版本：用于定位 decoder/query/box 是否塌缩，包含 `[DEP]` 和 `[BOX]` 检测 |
+| `tools/diagnose_predictions.py` | 保持队长版本：用于诊断 logits、背景占比和 sigmoid 置信度分布 |
+| `configs/rush_v2.yaml` | 保持队长版本：`queries: 300` + `focal_alpha: 0.5`，用于类别不平衡实验 |
+
+### 后续执行建议
+
+```bash
+python train.py --config configs/rush_v2.yaml --fold 1
+python tools/probe_forward.py --checkpoint checkpoints/rush_v2/latest.pth
+python tools/diagnose_predictions.py --checkpoint checkpoints/rush_v2/latest.pth
+```
+
+重点观察：
+
+- `[BOX] img1_vs_img2_diff`：若约等于 0，优先改 decoder query_pos 接法；
+- 验证框数量：epoch 10/20 是否保持非 0；
+- 背景类 logit 与目标类 logit 分布：判断是否仍被类别不平衡吸回全背景；
+- `latest.pth`：mAP 仍为 0 时不要等 `best.pth`，评估/诊断用 latest。
+
+### 注意
+
+此前提出的“P2 保留 RGB，P3-P5 三模态 CMFA 融合、Swin-Small、hidden_dim 192、decoder 4、queries 300”的显存优化方案，适合作为后续独立实验分支；本轮按队长报告对齐代码时不将其混入主线，以免影响 v0.6.0 根因闭环的可解释性。
+
+---
+
 ## v0.6.0 (patch) — 训练"0 框 / mAP=0"根因闭环：五处修复 + 诊断工具 + 不平衡实验配置
 
 **日期:** 2026-08-08
