@@ -77,30 +77,23 @@ class DINOLoss(nn.Module):
 
         indices = self.matcher(pred_logits, pred_boxes, target_labels, target_boxes)
 
-        # 2. 构造目标 label 和 box
-        # 分类: (B*Q, num_classes+1) one-hot
-        target_classes = torch.full(
-            (B, Q), self.num_classes,  # 默认背景
-            dtype=torch.long,
+        # 2. 构造前景类别 one-hot。
+        # Sigmoid focal 不需要显式背景类：未匹配 query 的所有前景目标均为 0。
+        # 若继续监督 background=1，会和 matcher/evaluator 的“忽略背景类”目标冲突，
+        # 并把模型推向背景 logit 长期最高的全背景吸引子。
+        target_onehot = torch.zeros(
+            B, Q, self.num_classes,
             device=pred_logits.device,
         )
-
-        # 填入匹配到的真实标签
         for i, (src_idx, tgt_idx) in enumerate(indices):
             if src_idx.numel() > 0:
-                target_classes[i, src_idx] = target_labels[i][tgt_idx]
+                labels = target_labels[i][tgt_idx].long()
+                target_onehot[i, src_idx, labels] = 1
 
-        # 转 one-hot
-        target_onehot = torch.zeros(
-            B * Q, self.num_classes + 1,
-            device=pred_logits.device,
-        )
-        target_onehot.scatter_(1, target_classes.reshape(-1, 1), 1)
-
-        # 分类损失
+        # 分类损失：只使用前景 logits，保留模型最后一维背景 logit 以兼容旧 checkpoint。
         loss_class = self.focal_loss(
-            pred_logits.reshape(-1, self.num_classes + 1),
-            target_onehot,
+            pred_logits[:, :, :self.num_classes].reshape(-1, self.num_classes),
+            target_onehot.reshape(-1, self.num_classes),
             normalizer=num_boxes,
         )
 

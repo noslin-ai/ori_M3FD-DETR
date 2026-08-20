@@ -6,6 +6,48 @@
 
 ---
 
+## v0.6.5 (patch) — 移除 sigmoid focal 中的显式背景类监督
+
+**日期:** 2026-08-20  
+**目标:** 继续处理“背景 logit 长期最高、前景置信度难以抬升、mAP 仍为 0”的分类训练目标冲突。
+
+### 问题定位
+
+v0.6.3 后，评估和推理已经改为只在前景类中取最大 sigmoid 分数；v0.6.4 后，decoder query 也开始分化。但训练损失仍把未匹配 query 的目标设为 `background=1`：
+
+```python
+target_classes = torch.full((B, Q), self.num_classes)
+target_onehot.scatter_(1, target_classes.reshape(-1, 1), 1)
+```
+
+这会让 900 个 query 中绝大多数 unmatched query 都强烈监督背景类为正样本，继续把模型推向背景 logit 最高的吸引子。对于 sigmoid focal 目标，更合理的做法是只监督前景 `C` 类：匹配 query 对应类别为 1，未匹配 query 所有前景类为 0，不再需要显式背景类。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `models/losses/dino_loss.py` | 修复 | 分类目标由 `num_classes+1` 改为仅前景 `num_classes`；未匹配 query 全 0 |
+| `models/losses/dino_loss.py` | 兼容 | 模型仍输出 `num_classes+1`，训练时只取 `pred_logits[:, :, :num_classes]`，旧 checkpoint 结构可继续加载 |
+
+### 验证命令
+
+```bash
+python -m py_compile models/losses/dino_loss.py
+python train.py --config configs/debug.yaml --fold 1
+python tools/diagnose_predictions.py --checkpoint checkpoints/debug/latest.pth
+python tools/probe_forward.py --checkpoint checkpoints/debug/latest.pth
+python evaluate.py --checkpoint checkpoints/debug/latest.pth --data-root data/train --conf-threshold 0.01
+```
+
+观察重点：
+
+- 去背景后前景 sigmoid 最大置信度是否高于之前的 `max≈0.0537`；
+- `conf > 0.1` 的 query 是否开始出现；
+- `[LOGITS] query_std`、`[BOX] query_std` 是否继续提升；
+- 若 mAP 仍为 0，再优先检查候选框 IoU / 坐标尺度。
+
+---
+
 ## v0.6.4 (patch) — 修复 decoder 未按 query_pos 使用 object query 导致跨 query 塌缩
 
 **日期:** 2026-08-20  
