@@ -48,8 +48,9 @@ def generalized_box_iou(boxes1, boxes2):
     wh_enclose = (rb_enclose - lt_enclose).clamp(min=0)
     enclose = wh_enclose[:, :, 0] * wh_enclose[:, :, 1]
 
-    iou = inter / union
-    giou = iou - (enclose - union) / enclose
+    eps = 1e-7
+    iou = inter / union.clamp(min=eps)
+    giou = iou - (enclose - union) / enclose.clamp(min=eps)
     return giou
 
 
@@ -92,9 +93,11 @@ class HungarianMatcher(nn.Module):
                                 torch.tensor([], dtype=torch.long)))
                 continue
 
-            # 分类代价: 使用预测概率
-            out_prob = pred_logits[i].softmax(-1)  # (Q, C+1)
-            cost_class = -out_prob[:, tgt_labels]  # (Q, N)
+            # 分类代价: 与 sigmoid Focal Loss 对齐。
+            # 旧版 softmax 会让背景类和目标类强制竞争，和当前 sigmoid 训练目标不一致，
+            # 容易在类别不平衡时把匹配推向低质量 query。
+            out_prob = pred_logits[i].sigmoid()[:, :-1]  # (Q, C), drop background
+            cost_class = -out_prob[:, tgt_labels.long()]  # (Q, N)
 
             # L1 框代价
             cost_bbox = torch.cdist(
@@ -113,7 +116,8 @@ class HungarianMatcher(nn.Module):
                 + self.cost_giou * cost_giou
             )
 
-            # 匈牙利算法求解
+            # 匈牙利算法求解；防止偶发退化框造成 NaN/Inf 代价。
+            cost = torch.nan_to_num(cost, nan=1e6, posinf=1e6, neginf=-1e6)
             row, col = linear_sum_assignment(cost.cpu())
             indices.append(
                 (torch.as_tensor(row, dtype=torch.long),

@@ -15,7 +15,7 @@ from models.detector.matcher import box_cxcywh_to_xyxy
 
 
 @torch.no_grad()
-def evaluate_model(model, loader, device, use_amp=True, conf_threshold=0.3):
+def evaluate_model(model, loader, device, use_amp=True, conf_threshold=0.001):
     """模型推理验证。
 
     Args:
@@ -59,7 +59,7 @@ def evaluate_model(model, loader, device, use_amp=True, conf_threshold=0.3):
             keep = (labels < num_classes) & (confs > conf_threshold)
             confs = confs[keep]
             labels = labels[keep]
-            boxes = pred_boxes[i][keep]
+            boxes = pred_boxes[i][keep].clamp(0, 1)
 
             # cxcywh → xywh (COCO format, pixel coords)
             cx, cy, w, h = boxes.unbind(-1)
@@ -69,6 +69,10 @@ def evaluate_model(model, loader, device, use_amp=True, conf_threshold=0.3):
                 w * img_w,
                 h * img_h,
             ], dim=-1)
+            coco_boxes[:, 0] = coco_boxes[:, 0].clamp(0, img_w)
+            coco_boxes[:, 1] = coco_boxes[:, 1].clamp(0, img_h)
+            coco_boxes[:, 2] = coco_boxes[:, 2].clamp(min=1e-3, max=img_w)
+            coco_boxes[:, 3] = coco_boxes[:, 3].clamp(min=1e-3, max=img_h)
 
             for j in range(len(confs)):
                 predictions.append({
@@ -190,7 +194,7 @@ def compute_map(predictions, targets, num_classes=12):
     return results
 
 
-def validate(model, loader, device, num_classes=12, use_amp=True, conf_threshold=0.3):
+def validate(model, loader, device, num_classes=12, use_amp=True, conf_threshold=0.001):
     """完整验证流程：推理 + mAP 计算。
 
     Args:

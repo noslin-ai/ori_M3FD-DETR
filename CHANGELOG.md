@@ -6,6 +6,49 @@
 
 ---
 
+## v0.6.2 (patch) — 针对 mAP 持续为 0 的匹配、分类归一化与评估阈值修复
+
+**日期:** 2026-08-14  
+**目标:** 在 v0.6.0 已修复 0 框 / query 塌缩主链路的基础上，继续处理“验证有框但 mAP 仍为 0”或“epoch 后期又回到全背景”的剩余风险点。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `models/detector/matcher.py` | 修复 | Hungarian matcher 的分类代价由 `softmax` 改为 `sigmoid` 目标类概率，和当前 sigmoid Focal Loss 训练目标对齐；同时对 GIoU 和总代价矩阵加入 NaN/Inf 防护 |
+| `models/losses/focal_loss.py` | 修复 | FocalLoss 新增 `normalizer` 参数，支持按 batch 内 GT 数量归一化 |
+| `models/losses/dino_loss.py` | 修复 | 分类损失传入 `num_boxes` 作为归一化因子，避免正样本信号继续被 query 数量稀释 |
+| `engine/evaluator.py` | 修复 | mAP 评估默认阈值由 `0.3` 降为 `0.001`；评估前对预测框做 clamp 和最小宽高保护 |
+| `evaluate.py` | 增强 | 新增 `--conf-threshold` 参数，便于评估时显式调整候选框过滤阈值 |
+
+### 根因补充
+
+v0.6.0 已解决位置编码、pretrained、input_proj、FocalLoss 元素级平均、后处理不匹配等问题；但 mAP 仍可能为 0 的剩余原因包括：
+
+1. **matcher 与 loss 不一致**：训练用 sigmoid Focal，但 Hungarian matcher 仍用 softmax 分类概率，背景类会和目标类强制竞争，可能导致正样本匹配质量差。
+2. **分类 loss 仍按 query 平均**：`loss.sum(-1).mean()` 虽然不再除以 `num_classes`，但仍会按 `B × Q` 平均。单图约 7 个 GT、300 queries 时，正样本梯度仍偏弱。
+3. **评估前阈值过高**：COCO AP 应尽量使用完整候选排序，默认 `conf_threshold=0.3` 会提前过滤低置信候选，可能让“有学习迹象但置信度未抬升”的模型评估为 0 框 / 0 mAP。
+4. **坏框数值影响评估**：预测框越界或极小宽高会干扰 COCO 格式评估，已在评估转换阶段做 clamp 和最小宽高保护。
+
+### 建议验证命令
+
+```bash
+python train.py --config configs/rush_v2.yaml --fold 1
+python evaluate.py --checkpoint checkpoints/rush_v2/latest.pth --data-root data/train --conf-threshold 0.001
+python tools/probe_forward.py --checkpoint checkpoints/rush_v2/latest.pth
+python tools/diagnose_predictions.py --checkpoint checkpoints/rush_v2/latest.pth
+```
+
+### 观察重点
+
+- `预测框数量` 是否稳定非 0；
+- `[BOX] img1_vs_img2_diff` 是否明显非 0；
+- `loss_class` 是否不再长期过小；
+- 目标类 sigmoid 置信度是否逐步高于背景吸引子；
+- `mAP@50` 是否先于 `mAP@50-95` 出现非 0。
+
+---
+
 ## v0.6.1 (audit) — 按队长交接报告对齐代码：确认 v0.6.0 五处根因修复未被覆盖
 
 **日期:** 2026-08-09  

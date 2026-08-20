@@ -69,6 +69,7 @@ class DINOLoss(nn.Module):
         pred_logits = outputs["pred_logits"]
         pred_boxes = outputs["pred_boxes"]
         B, Q = pred_logits.shape[:2]
+        num_boxes = sum(t["boxes"].shape[0] for t in targets)
 
         # 1. Hungarian 匹配
         target_labels = [t["labels"] for t in targets]
@@ -100,6 +101,7 @@ class DINOLoss(nn.Module):
         loss_class = self.focal_loss(
             pred_logits.reshape(-1, self.num_classes + 1),
             target_onehot,
+            normalizer=num_boxes,
         )
 
         # 3. 回归损失（仅对匹配到的 query）

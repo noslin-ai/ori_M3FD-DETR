@@ -39,6 +39,8 @@ def main():
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--num-classes", type=int, default=12)
     parser.add_argument("--export-json", default=None, help="导出 COCO JSON 路径")
+    parser.add_argument("--conf-threshold", type=float, default=0.001,
+                        help="评估前过滤阈值。mAP 建议保持很低，避免提前丢掉低置信候选")
     parser.add_argument("--use-ema", action="store_true", help="使用 EMA 权重")
     parser.add_argument("--backbone", default=None,
                         choices=["swin_tiny","swin_small","swin_base","swin_large"],
@@ -118,7 +120,10 @@ def main():
 
     # ---- 推理 ----
     print("\n[3] 开始推理...")
-    predictions, targets = evaluate_model(model, loader, device, use_amp=True)
+    predictions, targets = evaluate_model(
+        model, loader, device, use_amp=True,
+        conf_threshold=args.conf_threshold,
+    )
 
     print(f"  预测框: {len(predictions)}")
     print(f"  真实框: {len(targets)}")

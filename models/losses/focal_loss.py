@@ -28,11 +28,12 @@ class FocalLoss(nn.Module):
         self.alpha = alpha
         self.gamma = gamma
 
-    def forward(self, logits, targets):
+    def forward(self, logits, targets, normalizer=None):
         """
         Args:
             logits:  (N, C) 分类 logits（未经 sigmoid/softmax）
             targets: (N, C) one-hot 标签
+            normalizer: 可选归一化因子，推荐使用 batch 内 GT 数量。
 
         Returns:
             loss: scalar focal loss
@@ -55,6 +56,9 @@ class FocalLoss(nn.Module):
         )
 
         loss = alpha * focal_weight * bce   # (N, C)
-        # 按 query 汇总 13 个类别再取平均，避免被 num_queries×num_classes 稀释，
-        # 否则分类梯度远小于 box 梯度，模型只学框不学分类
+
+        if normalizer is not None:
+            return loss.sum() / max(float(normalizer), 1.0)
+
+        # 兼容旧调用：按 query 汇总类别维度再平均，避免被 num_queries×num_classes 稀释。
         return loss.sum(-1).mean()
