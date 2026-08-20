@@ -50,13 +50,12 @@ def evaluate_model(model, loader, device, use_amp=True, conf_threshold=0.001):
             image_id = batch_targets[i].get("image_id", torch.tensor([i])).item()
             img_h, img_w = rgb.shape[2], rgb.shape[3]
 
-            # 预测: sigmoid → 全类最大（含背景）→ 过滤背景类 + 置信度阈值
-            # 背景类胜出的 query 视为无目标，直接丢弃（与 Focal Loss 训练目标一致）
-            probs = pred_logits[i].sigmoid()      # (Q, C+1)
-            confs, labels = probs.max(-1)         # (Q,), (Q,)
-            num_classes = probs.shape[1] - 1
+            # 预测: sigmoid 后只在前景类中取最大分数。
+            # 背景类不参与推理筛选，否则背景 logit 偏高时会把所有候选提前丢掉。
+            probs = pred_logits[i].sigmoid()[:, :-1]  # (Q, C)
+            confs, labels = probs.max(-1)             # (Q,), (Q,)
 
-            keep = (labels < num_classes) & (confs > conf_threshold)
+            keep = confs > conf_threshold
             confs = confs[keep]
             labels = labels[keep]
             boxes = pred_boxes[i][keep].clamp(0, 1)

@@ -6,6 +6,40 @@
 
 ---
 
+## v0.6.3 (patch) — 修复 sigmoid 后处理仍被背景类吞掉导致评估 0 框
+
+**日期:** 2026-08-20  
+**目标:** 根据服务器 debug checkpoint 的诊断输出，修复“前景 sigmoid 已有低置信候选，但 evaluate 仍显示预测框 0”的后处理问题。
+
+### 现场证据
+
+```text
+预测框: 0
+真实框: 14417
+softmax argmax == 背景 的比例: 1.0000
+去背景后 sigmoid 最大置信度: mean=0.0506 max=0.0537
+```
+
+该结果说明模型并非完全没有前景响应；问题出在推理阶段把背景类也放进 `sigmoid().max()`，再用 `labels < num_classes` 过滤。由于背景 logit 始终最大，所有 query 都被提前丢弃，导致 `conf_threshold=0.001` 下仍然 0 框。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `engine/evaluator.py` | 修复 | 后处理由“含背景全类 sigmoid max + 过滤背景”改为“仅前景类 sigmoid max”，避免背景类吞掉全部候选 |
+| `inference.py` | 修复 | 提交文件生成逻辑同步改为仅前景类取最大分数，保持评估和推理一致 |
+
+### 验证命令
+
+```bash
+python evaluate.py --checkpoint checkpoints/debug/latest.pth --data-root data/train --conf-threshold 0.001
+python tools/diagnose_predictions.py --checkpoint checkpoints/debug/latest.pth
+```
+
+预期 `预测框` 应从 0 变为非 0；若 mAP 仍为 0，则下一步继续检查候选框 IoU、坐标尺度和类别分布，而不是再停留在“无预测框”问题。
+
+---
+
 ## v0.6.2 (patch) — 针对 mAP 持续为 0 的匹配、分类归一化与评估阈值修复
 
 **日期:** 2026-08-14  
