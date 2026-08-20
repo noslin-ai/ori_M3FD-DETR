@@ -8,8 +8,83 @@
 输出: (B, num_queries, hidden_dim) decoder hidden states
 """
 
-import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
+
+class DINOTransformerDecoderLayer(nn.Module):
+    """带 query_pos / memory_pos 的 DETR 风格 decoder layer。
+
+    属性名保持和 nn.TransformerDecoderLayer 一致，方便加载旧 checkpoint。
+    """
+
+    def __init__(self, d_model=256, nhead=8, dim_feedforward=2048, dropout=0.1):
+        super().__init__()
+        self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
+        self.multihead_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
+
+        self.linear1 = nn.Linear(d_model, dim_feedforward)
+        self.dropout = nn.Dropout(dropout)
+        self.linear2 = nn.Linear(dim_feedforward, d_model)
+
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.norm3 = nn.LayerNorm(d_model)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+        self.dropout3 = nn.Dropout(dropout)
+
+    @staticmethod
+    def with_pos_embed(tensor, pos):
+        return tensor if pos is None else tensor + pos
+
+    def forward(self, tgt, memory, pos=None, query_pos=None, tgt_mask=None):
+        q = k = self.with_pos_embed(tgt, query_pos)
+        tgt2 = self.self_attn(q, k, value=tgt, attn_mask=tgt_mask)[0]
+        tgt = tgt + self.dropout1(tgt2)
+        tgt = self.norm1(tgt)
+
+        tgt2 = self.multihead_attn(
+            query=self.with_pos_embed(tgt, query_pos),
+            key=self.with_pos_embed(memory, pos),
+            value=memory,
+        )[0]
+        tgt = tgt + self.dropout2(tgt2)
+        tgt = self.norm2(tgt)
+
+        tgt2 = self.linear2(self.dropout(F.relu(self.linear1(tgt))))
+        tgt = tgt + self.dropout3(tgt2)
+        tgt = self.norm3(tgt)
+        return tgt
+
+
+class DINOTransformerDecoder(nn.Module):
+    """轻量 decoder 容器，保留 decoder.layers.* 的 state_dict 键名。"""
+
+    def __init__(self, decoder_layer, num_layers):
+        super().__init__()
+        self.layers = nn.ModuleList([decoder_layer])
+        for _ in range(1, num_layers):
+            self.layers.append(
+                DINOTransformerDecoderLayer(
+                    d_model=decoder_layer.linear2.out_features,
+                    nhead=decoder_layer.self_attn.num_heads,
+                    dim_feedforward=decoder_layer.linear1.out_features,
+                    dropout=decoder_layer.dropout.p,
+                )
+            )
+
+    def forward(self, tgt, memory, pos=None, query_pos=None, tgt_mask=None):
+        output = tgt
+        for layer in self.layers:
+            output = layer(
+                output,
+                memory,
+                pos=pos,
+                query_pos=query_pos,
+                tgt_mask=tgt_mask,
+            )
+        return output
 
 
 class DINOTransformer(nn.Module):
@@ -33,17 +108,16 @@ class DINOTransformer(nn.Module):
     ):
         super().__init__()
 
-        decoder_layer = nn.TransformerDecoderLayer(
+        decoder_layer = DINOTransformerDecoderLayer(
             d_model=d_model,
             nhead=nhead,
             dim_feedforward=dim_feedforward,
-            batch_first=False,   # (seq, batch, feat) 格式，与 dino_detector 传入一致
             dropout=0.1,
         )
 
-        self.decoder = nn.TransformerDecoder(
+        self.decoder = DINOTransformerDecoder(
             decoder_layer,
-            num_layers=num_decoder_layers,
+            num_decoder_layers,
         )
 
     def forward(self, tgt, memory, pos, query_embed=None, mask=None):
@@ -58,9 +132,6 @@ class DINOTransformer(nn.Module):
         Returns:
             hs: list of [(Nq, B, C)] per decoder layer
         """
-        # 将位置编码加到 memory 上
-        memory = memory + pos
-
         # 使用传入的 query_embed；当前由 dino_detector.py 传入，不支持内部 fallback
         if query_embed is None:
             raise ValueError(
@@ -79,7 +150,14 @@ class DINOTransformer(nn.Module):
             tgt_mask = mask.float()
             tgt_mask.masked_fill_(tgt_mask.bool(), float('-inf'))
 
-        # Decoder: query 从 memory 中聚合信息
-        hs = self.decoder(query_embed, memory, tgt_mask=tgt_mask)  # (Nq, B, C)
+        # Decoder: tgt 是内容向量，query_embed 是 object query 的位置向量。
+        # 旧实现把 query_embed 直接当 tgt，训练后容易被 cross-attention/LayerNorm 拉成同质输出。
+        hs = self.decoder(
+            tgt,
+            memory,
+            pos=pos,
+            query_pos=query_embed,
+            tgt_mask=tgt_mask,
+        )  # (Nq, B, C)
 
         return [hs]  # 返回 list 保持与多尺度输出的一致性

@@ -6,6 +6,62 @@
 
 ---
 
+## v0.6.4 (patch) — 修复 decoder 未按 query_pos 使用 object query 导致跨 query 塌缩
+
+**日期:** 2026-08-20  
+**目标:** 根据 `probe_forward.py` 的输出，修复 decoder 输出几乎不随 object query 变化的问题，让不同 query 能学习不同检测槽位。
+
+### 现场证据
+
+```text
+[DECODER] query_std=0.000121
+[DEP]     hs 随 memory 变化: 0.209253 | hs 随 query 变化: 0.000135
+[LOGITS]  query_std=0.000062
+[BOX]     query_std=0.000021 img1_vs_img2_diff=0.154687
+```
+
+该结果说明 backbone、FPN、位置编码和输入图像依赖都不是完全失效；真正的问题是 decoder 输出对不同 query 几乎一致，导致 900 个 query 生成高度重复的类别和框。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `models/detector/transformer.py` | 修复 | 自定义 DETR 风格 decoder layer：`tgt` 作为内容向量，`query_embed` 作为 `query_pos` 注入 self-attention / cross-attention |
+| `models/detector/transformer.py` | 兼容 | 保留 `decoder.layers.*`、`self_attn`、`multihead_attn`、`linear/norm/dropout` 等 state_dict 键名，便于加载旧 checkpoint |
+
+### 根因说明
+
+旧实现虽然从 `dino_detector.py` 传入了 `tgt = zeros_like(query_embed)`，但在 transformer 内部实际执行的是：
+
+```python
+hs = self.decoder(query_embed, memory, tgt_mask=tgt_mask)
+```
+
+这等于把 object query 直接当 decoder 内容输入，而不是作为 query position。标准 DETR/DINO 的接法应是：
+
+```python
+self_attn(q=tgt + query_pos, k=tgt + query_pos, v=tgt)
+cross_attn(q=tgt + query_pos, k=memory + pos, v=memory)
+```
+
+本轮已按该逻辑重写 decoder forward，避免 query 信息在多层 cross-attention 和 LayerNorm 后被拉成同质输出。
+
+### 验证命令
+
+```bash
+python -m py_compile models/detector/transformer.py
+python tools/probe_forward.py --checkpoint checkpoints/debug/latest.pth
+```
+
+观察重点：
+
+- `[DECODER] query_std` 应明显高于 `0.0001`；
+- `[DEP] hs 随 query 变化` 应明显增大；
+- `[LOGITS] query_std`、`[BOX] query_std` 应不再接近 0；
+- 旧 checkpoint 可用于结构诊断，但正式效果仍建议重新训练，因为 decoder 前向语义已经改变。
+
+---
+
 ## v0.6.3 (patch) — 修复 sigmoid 后处理仍被背景类吞掉导致评估 0 框
 
 **日期:** 2026-08-20  
