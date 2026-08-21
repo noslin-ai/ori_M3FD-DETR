@@ -57,8 +57,12 @@ class FocalLoss(nn.Module):
 
         loss = alpha * focal_weight * bce   # (N, C)
 
+        # 先对类别维度取平均，再按 GT 数量归一化。
+        # 直接对 N*C 全部求和会让分类项随类别数线性放大，训练日志常被抬到 5+，
+        # 但这不是更强监督，只是量纲偏大。
+        loss = loss.mean(-1)
+
         if normalizer is not None:
             return loss.sum() / max(float(normalizer), 1.0)
 
-        # 兼容旧调用：按 query 汇总类别维度再平均，避免被 num_queries×num_classes 稀释。
-        return loss.sum(-1).mean()
+        return loss.mean()

@@ -6,6 +6,48 @@
 
 ---
 
+## v0.6.6 (patch) — 调整 loss 量纲、训练日志与评估候选数
+
+**日期:** 2026-08-21  
+**目标:** 处理“mAP 仍为 0、总 loss 长期偏高”的训练可观测性和损失量纲问题，避免只看总 loss 误判模型状态。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `models/losses/focal_loss.py` | 修复 | Focal loss 先对类别维度取平均，再按 GT 数量归一化，避免分类项随类别数线性放大 |
+| `engine/trainer.py` | 增强 | 训练日志新增 `cls/bbox/giou` 三项平均值，便于判断 loss 高来自分类还是定位 |
+| `engine/evaluator.py` | 优化 | 每张图按置信度最多保留 100 个预测框，与 COCOeval `maxDets=100` 对齐，减少低分候选干扰和评估开销 |
+| `configs/debug.yaml` | 调整 | debug 改为 `swin_tiny + 300 queries + num_workers=2`，并降低损失权重量纲 |
+| `configs/rush_v2.yaml` | 调整 | loss 权重改为 `class=1, bbox=2, giou=1`，让总 loss 更接近 1~2 的可观察区间 |
+
+### 注意
+
+总 loss 不是越低越好。若只是把权重整体缩小，loss 可以马上变成 1 以下，但 mAP 不会因此变好。本轮修改重点是：
+
+1. 修正分类项的类别维度量纲；
+2. 降低 900 query / 大 backbone 带来的 debug 噪声；
+3. 打印分项 loss，后续按根因调参。
+
+### 建议验证命令
+
+```bash
+python -m py_compile models/losses/focal_loss.py engine/trainer.py engine/evaluator.py
+python train.py --config configs/debug.yaml --fold 1
+python tools/diagnose_predictions.py --checkpoint checkpoints/debug/latest.pth
+python tools/probe_forward.py --checkpoint checkpoints/debug/latest.pth
+python evaluate.py --checkpoint checkpoints/debug/latest.pth --data-root data/train --conf-threshold 0.01
+```
+
+训练日志中优先观察：
+
+- `avg` 是否进入约 1~2；
+- `cls` 是否持续下降；
+- `bbox/giou` 是否仍明显偏高；
+- `mAP@50` 是否先于 `mAP@50-95` 出现非 0。
+
+---
+
 ## v0.6.5 (patch) — 移除 sigmoid focal 中的显式背景类监督
 
 **日期:** 2026-08-20  

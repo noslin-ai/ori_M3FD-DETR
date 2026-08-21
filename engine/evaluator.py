@@ -15,7 +15,7 @@ from models.detector.matcher import box_cxcywh_to_xyxy
 
 
 @torch.no_grad()
-def evaluate_model(model, loader, device, use_amp=True, conf_threshold=0.001):
+def evaluate_model(model, loader, device, use_amp=True, conf_threshold=0.001, max_dets=100):
     """模型推理验证。
 
     Args:
@@ -24,6 +24,7 @@ def evaluate_model(model, loader, device, use_amp=True, conf_threshold=0.001):
         device: cuda / cpu
         use_amp: 是否使用混合精度
         conf_threshold: 置信度阈值（sigmoid），低于该值的预测被过滤
+        max_dets: 每张图最多保留预测框数，和 COCOeval maxDets=100 对齐
 
     Returns:
         predictions: list of dict（COCO 格式预测）
@@ -59,6 +60,12 @@ def evaluate_model(model, loader, device, use_amp=True, conf_threshold=0.001):
             confs = confs[keep]
             labels = labels[keep]
             boxes = pred_boxes[i][keep].clamp(0, 1)
+
+            if max_dets is not None and len(confs) > max_dets:
+                topk = confs.argsort(descending=True)[:max_dets]
+                confs = confs[topk]
+                labels = labels[topk]
+                boxes = boxes[topk]
 
             # cxcywh → xywh (COCO format, pixel coords)
             cx, cy, w, h = boxes.unbind(-1)
