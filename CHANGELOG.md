@@ -6,6 +6,32 @@
 
 ---
 
+## v0.6.7 (tool) — 新增 IoU 诊断脚本定位 mAP=0 的框匹配问题
+
+**日期:** 2026-08-21  
+**目标:** 在 loss 已降到约 1、前景置信度开始抬升但 mAP 仍为 0 的情况下，区分“类别预测错误”和“框 IoU 过低 / 坐标尺度异常”。
+
+### 新增工具
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `tools/diagnose_iou.py` | 新增 | 统计 top-k 预测框与 GT 的 class-agnostic / same-class 最大 IoU、GT recall@IoU、预测/GT 框分布和类别分布 |
+
+### 使用命令
+
+```bash
+python tools/diagnose_iou.py --checkpoint checkpoints/debug/latest.pth --conf-threshold 0.01
+```
+
+重点看：
+
+- `每图最佳 IoU(不看类别)`：若仍接近 0，优先查框坐标/resize/box head；
+- `每图最佳 IoU(同类别)`：若远低于不看类别 IoU，说明分类错得更多；
+- `GT recall@IoU0.5 same_cls`：接近 0 时 mAP@50 必然为 0；
+- `pred` vs `gt` 框分布：快速发现预测框过小、过大或中心偏移。
+
+---
+
 ## v0.6.6 (patch) — 调整 loss 量纲、训练日志与评估候选数
 
 **日期:** 2026-08-21  
