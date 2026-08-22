@@ -70,7 +70,11 @@ class FocalLoss(nn.Module):
                 raise ValueError(
                     f"class_weights 长度 {weights.numel()} != 类别数 {loss.shape[-1]}"
                 )
-            loss = loss * weights.view(1, -1)
+            # 只放大匹配到的正样本类别。
+            # 若同时放大负样本项，少数类在大量 unmatched query 上会承受更强负梯度，
+            # 反而更难从 class 0/2 塌缩中抬头。
+            pos_weights = 1.0 + (weights.view(1, -1) - 1.0) * targets
+            loss = loss * pos_weights
 
         # 先对类别维度取平均，再按 GT 数量归一化。
         # 直接对 N*C 全部求和会让分类项随类别数线性放大，训练日志常被抬到 5+，
