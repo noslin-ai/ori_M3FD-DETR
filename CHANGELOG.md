@@ -6,6 +6,53 @@
 
 ---
 
+## v0.6.9 (patch) — 针对 class 0/2 塌缩加入类别加权 focal
+
+**日期:** 2026-08-22  
+**目标:** 在定位 recall 已有改善但 mAP 仍为 0 的情况下，处理预测类别几乎集中到 class 0/2 的分类塌缩。
+
+### 现场证据
+
+```text
+GT recall@IoU0.5: any=0.0730 same_cls=0.0730
+pred: [(0, 6226), (2, 174)]
+gt:   [(10, 102), (6, 68), (8, 67), (0, 43), ...]
+conf > 0.1: 923 / 9600
+```
+
+结论：定位比上一轮明显改善，前景置信度也抬升；但预测类别严重偏向 class 0/2，和 GT 主要类别不一致，导致 AP 仍难以非 0。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `models/losses/focal_loss.py` | 增强 | 新增 `class_weights`，支持对不同前景类的 focal loss 加权 |
+| `models/losses/dino_loss.py` | 增强 | `DINOLoss` 透传 `class_weights` 到 `FocalLoss` |
+| `train.py` | 增强 | 从配置读取 `loss.class_weights` |
+| `configs/debug.yaml` | 调参 | `cost_class=2.0`、`focal_alpha=0.75`，并降低 class 0/2 权重、提高 class 10/6/8 权重 |
+| `configs/rush_v2.yaml` | 调参 | 同步分类塌缩修复参数 |
+
+### 新分类权重
+
+```yaml
+class_weights: [0.5, 1.0, 0.7, 1.2, 1.2, 1.0, 2.0, 1.0, 2.0, 1.2, 2.5, 1.0]
+```
+
+含义：降低当前过度预测的 class 0/2 权重，提高 GT 中更常见但模型没学到的 class 10/6/8 权重。
+
+### 下一步
+
+```bash
+python train.py --config configs/debug.yaml --fold 1
+python tools/diagnose_iou.py --checkpoint checkpoints/debug/latest.pth --conf-threshold 0.01
+python tools/diagnose_predictions.py --checkpoint checkpoints/debug/latest.pth
+python evaluate.py --checkpoint checkpoints/debug/latest.pth --data-root data/train --conf-threshold 0.01
+```
+
+重点观察 `pred` 类别分布是否从 class 0/2 扩散到 class 10/6/8。
+
+---
+
 ## v0.6.8 (patch) — 根据 IoU 诊断重新加强定位损失权重
 
 **日期:** 2026-08-22  

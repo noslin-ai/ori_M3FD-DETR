@@ -23,10 +23,17 @@ class FocalLoss(nn.Module):
         gamma: 聚焦因子（默认 2.0）
     """
 
-    def __init__(self, alpha=0.25, gamma=2.0):
+    def __init__(self, alpha=0.25, gamma=2.0, class_weights=None):
         super().__init__()
         self.alpha = alpha
         self.gamma = gamma
+        if class_weights is None:
+            self.register_buffer("class_weights", None)
+        else:
+            self.register_buffer(
+                "class_weights",
+                torch.as_tensor(class_weights, dtype=torch.float32),
+            )
 
     def forward(self, logits, targets, normalizer=None):
         """
@@ -56,6 +63,14 @@ class FocalLoss(nn.Module):
         )
 
         loss = alpha * focal_weight * bce   # (N, C)
+
+        if self.class_weights is not None:
+            weights = self.class_weights.to(device=loss.device, dtype=loss.dtype)
+            if weights.numel() != loss.shape[-1]:
+                raise ValueError(
+                    f"class_weights 长度 {weights.numel()} != 类别数 {loss.shape[-1]}"
+                )
+            loss = loss * weights.view(1, -1)
 
         # 先对类别维度取平均，再按 GT 数量归一化。
         # 直接对 N*C 全部求和会让分类项随类别数线性放大，训练日志常被抬到 5+，

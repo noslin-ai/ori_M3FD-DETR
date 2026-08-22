@@ -36,6 +36,7 @@ class DINOLoss(nn.Module):
         cost_giou=2.0,
         focal_alpha=0.25,
         focal_gamma=2.0,
+        class_weights=None,
     ):
         super().__init__()
         self.num_classes = num_classes
@@ -51,7 +52,11 @@ class DINOLoss(nn.Module):
         )
 
         # 分类损失
-        self.focal_loss = FocalLoss(alpha=focal_alpha, gamma=focal_gamma)
+        self.focal_loss = FocalLoss(
+            alpha=focal_alpha,
+            gamma=focal_gamma,
+            class_weights=class_weights,
+        )
 
     def forward(self, outputs, targets):
         """
