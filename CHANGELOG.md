@@ -6,6 +6,47 @@
 
 ---
 
+## v0.6.8 (patch) — 根据 IoU 诊断重新加强定位损失权重
+
+**日期:** 2026-08-22  
+**目标:** 在总 loss 已进入 1 左右但 mAP 仍为 0 的情况下，把优化重点重新转向定位质量。
+
+### 现场证据
+
+```text
+每图最佳 IoU(不看类别): 0.1735
+每图最佳 IoU(同类别):   0.0483
+GT recall@IoU0.3: any=0.0159 same_cls=0.0000
+GT recall@IoU0.5: any=0.0000 same_cls=0.0000
+pred: [(0, 6336), (2, 64)]
+gt:   [(10, 102), (6, 68), (8, 67), ...]
+```
+
+结论：框定位还远不到 AP50 要求，类别也明显塌到 class 0。先加强定位项，让候选框至少能接近 GT；否则分类即使改善，mAP 仍然无法非 0。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `configs/debug.yaml` | 调参 | loss 权重改为 `cost_class=1, cost_bbox=5, cost_giou=2` |
+| `configs/rush_v2.yaml` | 调参 | 同步恢复更强定位权重，同时按当前 loss 分项估算总 loss 仍约 1.9 |
+| `tools/diagnose_iou.py` | 增强 | 框分布新增逐坐标 `cx/cy/w/h` 的 mean/min/max，便于判断中心偏移或宽高偏置 |
+
+### 下一步
+
+重新训练 debug 后观察：
+
+```bash
+python train.py --config configs/debug.yaml --fold 1
+python tools/diagnose_iou.py --checkpoint checkpoints/debug/latest.pth --conf-threshold 0.01
+python tools/diagnose_predictions.py --checkpoint checkpoints/debug/latest.pth
+python evaluate.py --checkpoint checkpoints/debug/latest.pth --data-root data/train --conf-threshold 0.01
+```
+
+预期优先看到 `GT recall@IoU0.1/0.3` 上升；若 `any IoU` 上升但 `same_cls` 仍为 0，再处理类别塌缩。
+
+---
+
 ## v0.6.7 (tool) — 新增 IoU 诊断脚本定位 mAP=0 的框匹配问题
 
 **日期:** 2026-08-21  

@@ -51,6 +51,15 @@ def summarize_tensor(name, value):
         f"  {name}: mean={value.mean():.4f} min={value.min():.4f} "
         f"max={value.max():.4f}"
     )
+    if value.ndim == 2 and value.shape[1] == 4:
+        coord_names = ("cx", "cy", "w", "h")
+        parts = []
+        for idx, coord in enumerate(coord_names):
+            v = value[:, idx]
+            parts.append(
+                f"{coord}=mean:{v.mean():.4f}/min:{v.min():.4f}/max:{v.max():.4f}"
+            )
+        print("    " + " | ".join(parts))
 
 
 @torch.no_grad()
