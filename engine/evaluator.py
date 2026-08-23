@@ -14,8 +14,61 @@ from torch.cuda.amp import autocast
 from models.detector.matcher import box_cxcywh_to_xyxy
 
 
+def _box_iou_xyxy(box, boxes):
+    """计算单个 xyxy 框与一组 xyxy 框的 IoU。"""
+    lt = torch.maximum(box[:2], boxes[:, :2])
+    rb = torch.minimum(box[2:], boxes[:, 2:])
+    wh = (rb - lt).clamp(min=0)
+    inter = wh[:, 0] * wh[:, 1]
+
+    area1 = ((box[2] - box[0]).clamp(min=0) *
+             (box[3] - box[1]).clamp(min=0))
+    area2 = ((boxes[:, 2] - boxes[:, 0]).clamp(min=0) *
+             (boxes[:, 3] - boxes[:, 1]).clamp(min=0))
+    return inter / (area1 + area2 - inter).clamp(min=1e-7)
+
+
+def class_aware_nms(boxes_cxcywh, scores, labels, iou_threshold=0.6, max_dets=100):
+    """按类别做 NMS，输入/输出均为归一化 cxcywh。"""
+    if boxes_cxcywh.numel() == 0:
+        return torch.empty(0, dtype=torch.long, device=boxes_cxcywh.device)
+
+    keep_all = []
+    boxes_xyxy = box_cxcywh_to_xyxy(boxes_cxcywh).clamp(0, 1)
+
+    for cls_id in labels.unique():
+        cls_idx = torch.nonzero(labels == cls_id, as_tuple=False).flatten()
+        order = scores[cls_idx].argsort(descending=True)
+        cls_idx = cls_idx[order]
+
+        keep_cls = []
+        while cls_idx.numel() > 0:
+            current = cls_idx[0]
+            keep_cls.append(current)
+            if cls_idx.numel() == 1:
+                break
+            ious = _box_iou_xyxy(boxes_xyxy[current], boxes_xyxy[cls_idx[1:]])
+            cls_idx = cls_idx[1:][ious <= iou_threshold]
+
+        keep_all.extend(keep_cls)
+
+    keep = torch.stack(keep_all) if keep_all else torch.empty(0, dtype=torch.long, device=boxes_cxcywh.device)
+    keep = keep[scores[keep].argsort(descending=True)]
+    if max_dets is not None:
+        keep = keep[:max_dets]
+    return keep
+
+
 @torch.no_grad()
-def evaluate_model(model, loader, device, use_amp=True, conf_threshold=0.001, max_dets=100):
+def evaluate_model(
+    model,
+    loader,
+    device,
+    use_amp=True,
+    conf_threshold=0.001,
+    max_dets=100,
+    nms_iou=0.6,
+):
     """模型推理验证。
 
     Args:
@@ -25,6 +78,7 @@ def evaluate_model(model, loader, device, use_amp=True, conf_threshold=0.001, ma
         use_amp: 是否使用混合精度
         conf_threshold: 置信度阈值（sigmoid），低于该值的预测被过滤
         max_dets: 每张图最多保留预测框数，和 COCOeval maxDets=100 对齐
+        nms_iou: 同类别 NMS IoU 阈值；小于等于 0 时关闭 NMS
 
     Returns:
         predictions: list of dict（COCO 格式预测）
@@ -61,7 +115,12 @@ def evaluate_model(model, loader, device, use_amp=True, conf_threshold=0.001, ma
             labels = labels[keep]
             boxes = pred_boxes[i][keep].clamp(0, 1)
 
-            if max_dets is not None and len(confs) > max_dets:
+            if nms_iou and nms_iou > 0:
+                keep_idx = class_aware_nms(boxes, confs, labels, nms_iou, max_dets)
+                confs = confs[keep_idx]
+                labels = labels[keep_idx]
+                boxes = boxes[keep_idx]
+            elif max_dets is not None and len(confs) > max_dets:
                 topk = confs.argsort(descending=True)[:max_dets]
                 confs = confs[topk]
                 labels = labels[topk]
@@ -200,7 +259,15 @@ def compute_map(predictions, targets, num_classes=12):
     return results
 
 
-def validate(model, loader, device, num_classes=12, use_amp=True, conf_threshold=0.001):
+def validate(
+    model,
+    loader,
+    device,
+    num_classes=12,
+    use_amp=True,
+    conf_threshold=0.001,
+    nms_iou=0.6,
+):
     """完整验证流程：推理 + mAP 计算。
 
     Args:
@@ -214,7 +281,9 @@ def validate(model, loader, device, num_classes=12, use_amp=True, conf_threshold
         dict: mAP 结果
     """
     print("  开始验证...")
-    predictions, targets = evaluate_model(model, loader, device, use_amp, conf_threshold)
+    predictions, targets = evaluate_model(
+        model, loader, device, use_amp, conf_threshold, nms_iou=nms_iou
+    )
     print(f"  预测 {len(predictions)} 个框, GT {len(targets)} 个框")
 
     results = compute_map(predictions, targets, num_classes)

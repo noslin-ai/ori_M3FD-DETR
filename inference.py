@@ -31,6 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from datasets.rgb_ir_depth_dataset import RGBIRDepthDataset
 from models.m3f_detr import M3F_DETR
+from engine.evaluator import class_aware_nms
 from utils.checkpoint import _safe_torch_load, strip_state_dict_prefixes
 
 
@@ -42,6 +43,7 @@ def generate_submission(
     device,
     conf_threshold=0.3,
     max_det=100,
+    nms_iou=0.6,
     clean_output=False,
     use_amp=True,
 ):
@@ -54,6 +56,7 @@ def generate_submission(
         device: 设备
         conf_threshold: 置信度阈值
         max_det: 每张图最多保留的预测框数量
+        nms_iou: 同类别 NMS IoU 阈值；小于等于 0 时关闭 NMS
         clean_output: 生成前是否清空旧输出目录
         use_amp: 是否使用混合精度
     """
@@ -87,8 +90,19 @@ def generate_submission(
             valid_scores = max_scores[valid]           # (K,)
             valid_boxes = pred_boxes[i][valid]         # (K, 4)
 
-            # 按置信度排序，截断到最多 100 个框（竞赛要求）
-            if len(valid_labels) > max_det:
+            if nms_iou and nms_iou > 0:
+                keep_idx = class_aware_nms(
+                    valid_boxes.clamp(0.0, 1.0),
+                    valid_scores,
+                    valid_labels,
+                    iou_threshold=nms_iou,
+                    max_dets=max_det,
+                )
+                valid_labels = valid_labels[keep_idx]
+                valid_scores = valid_scores[keep_idx]
+                valid_boxes = valid_boxes[keep_idx]
+            elif len(valid_labels) > max_det:
+                # 按置信度排序，截断到最多 100 个框（竞赛要求）
                 sorted_idx = valid_scores.argsort(descending=True)[:max_det]
                 valid_labels = valid_labels[sorted_idx]
                 valid_scores = valid_scores[sorted_idx]
@@ -139,6 +153,7 @@ def main():
     parser.add_argument("--output", default="submission", help="输出目录")
     parser.add_argument("--conf-threshold", type=float, default=0.3, help="置信度阈值")
     parser.add_argument("--max-det", type=int, default=100, help="每张图最多保留预测框数量")
+    parser.add_argument("--nms-iou", type=float, default=0.6, help="同类别 NMS IoU 阈值；<=0 关闭")
     parser.add_argument("--clean-output", action="store_true", help="生成前清空输出目录")
     parser.add_argument("--zip", default=None, help="可选：生成提交 zip 路径，例如 submission.zip")
     parser.add_argument("--batch-size", type=int, default=2)
@@ -165,6 +180,7 @@ def main():
     print(f"  Output: {args.output}/")
     print(f"  Conf threshold: {args.conf_threshold}")
     print(f"  Max detections/image: {args.max_det}")
+    print(f"  NMS IoU: {args.nms_iou}")
     print(f"  Device: {device}")
     print(f"  EMA: {args.use_ema}")
 
@@ -234,6 +250,7 @@ def main():
         model, loader, args.output, device,
         conf_threshold=args.conf_threshold,
         max_det=args.max_det,
+        nms_iou=args.nms_iou,
         clean_output=args.clean_output,
         use_amp=True,
     )

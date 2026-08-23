@@ -41,6 +41,8 @@ def main():
     parser.add_argument("--export-json", default=None, help="导出 COCO JSON 路径")
     parser.add_argument("--conf-threshold", type=float, default=0.001,
                         help="评估前过滤阈值。mAP 建议保持很低，避免提前丢掉低置信候选")
+    parser.add_argument("--nms-iou", type=float, default=0.6,
+                        help="同类别 NMS IoU 阈值；<=0 关闭")
     parser.add_argument("--use-ema", action="store_true", help="使用 EMA 权重")
     parser.add_argument("--backbone", default=None,
                         choices=["swin_tiny","swin_small","swin_base","swin_large"],
@@ -123,6 +125,7 @@ def main():
     predictions, targets = evaluate_model(
         model, loader, device, use_amp=True,
         conf_threshold=args.conf_threshold,
+        nms_iou=args.nms_iou,
     )
 
     print(f"  预测框: {len(predictions)}")
