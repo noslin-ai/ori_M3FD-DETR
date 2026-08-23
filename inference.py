@@ -21,6 +21,8 @@
 import os
 import sys
 import argparse
+import math
+import shutil
 import torch
 from torch.utils.data import DataLoader
 from torch.cuda.amp import autocast
@@ -39,6 +41,8 @@ def generate_submission(
     output_dir,
     device,
     conf_threshold=0.3,
+    max_det=100,
+    clean_output=False,
     use_amp=True,
 ):
     """在测试集上推理并生成提交文件。
@@ -49,10 +53,14 @@ def generate_submission(
         output_dir: 输出目录
         device: 设备
         conf_threshold: 置信度阈值
+        max_det: 每张图最多保留的预测框数量
+        clean_output: 生成前是否清空旧输出目录
         use_amp: 是否使用混合精度
     """
     model.eval()
 
+    if clean_output and os.path.isdir(output_dir):
+        shutil.rmtree(output_dir)
     os.makedirs(output_dir, exist_ok=True)
     sample_idx = 0
 
@@ -79,10 +87,9 @@ def generate_submission(
             valid_scores = max_scores[valid]           # (K,)
             valid_boxes = pred_boxes[i][valid]         # (K, 4)
 
-            # 写入 txt 文件
             # 按置信度排序，截断到最多 100 个框（竞赛要求）
-            if len(valid_labels) > 100:
-                sorted_idx = valid_scores.argsort(descending=True)[:100]
+            if len(valid_labels) > max_det:
+                sorted_idx = valid_scores.argsort(descending=True)[:max_det]
                 valid_labels = valid_labels[sorted_idx]
                 valid_scores = valid_scores[sorted_idx]
                 valid_boxes = valid_boxes[sorted_idx]
@@ -96,17 +103,33 @@ def generate_submission(
                 for j in range(len(valid_labels)):
                     cls_id = valid_labels[j].item()
                     conf = valid_scores[j].item()
-                    box = valid_boxes[j]  # (cx, cy, w, h) normalized
+                    box = valid_boxes[j].detach().float().clamp(0.0, 1.0)
+                    cx, cy, w, h = [v.item() for v in box]
+
+                    # 比赛会判非法类别、非法坐标、置信度缺失为无效预测。
+                    if not (0 <= cls_id < probs.shape[-1]):
+                        continue
+                    if not all(math.isfinite(v) for v in (cx, cy, w, h, conf)):
+                        continue
+                    if w <= 0.0 or h <= 0.0 or conf <= 0.0:
+                        continue
 
                     # 格式: class_id cx cy w h confidence
                     f.write(
                         f"{cls_id} "
-                        f"{box[0].item():.6f} {box[1].item():.6f} "
-                        f"{box[2].item():.6f} {box[3].item():.6f} "
+                        f"{cx:.6f} {cy:.6f} "
+                        f"{w:.6f} {h:.6f} "
                         f"{conf:.6f}\n"
                     )
 
     print(f"\n  Generated {sample_idx} submission files → {output_dir}/")
+
+
+def make_zip(output_dir, zip_path):
+    """将提交目录打包为 zip，zip 根目录直接包含所有 txt 文件。"""
+    base_name = zip_path[:-4] if zip_path.endswith(".zip") else zip_path
+    archive_path = shutil.make_archive(base_name, "zip", root_dir=output_dir)
+    print(f"  Packed submission zip → {archive_path}")
 
 
 def main():
@@ -115,6 +138,9 @@ def main():
     parser.add_argument("--data-root", required=True, help="测试数据根目录")
     parser.add_argument("--output", default="submission", help="输出目录")
     parser.add_argument("--conf-threshold", type=float, default=0.3, help="置信度阈值")
+    parser.add_argument("--max-det", type=int, default=100, help="每张图最多保留预测框数量")
+    parser.add_argument("--clean-output", action="store_true", help="生成前清空输出目录")
+    parser.add_argument("--zip", default=None, help="可选：生成提交 zip 路径，例如 submission.zip")
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--num-classes", type=int, default=12)
@@ -138,6 +164,7 @@ def main():
     print(f"  Data root: {args.data_root}")
     print(f"  Output: {args.output}/")
     print(f"  Conf threshold: {args.conf_threshold}")
+    print(f"  Max detections/image: {args.max_det}")
     print(f"  Device: {device}")
     print(f"  EMA: {args.use_ema}")
 
@@ -206,8 +233,13 @@ def main():
     generate_submission(
         model, loader, args.output, device,
         conf_threshold=args.conf_threshold,
+        max_det=args.max_det,
+        clean_output=args.clean_output,
         use_amp=True,
     )
+
+    if args.zip:
+        make_zip(args.output, args.zip)
 
     print("\n" + "=" * 70)
     print("  Submission generation complete!")
