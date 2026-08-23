@@ -38,14 +38,12 @@ scheduler:
   warmup_epochs: 1
 
 loss:
-  cost_class: 2.0
+  cost_class: 1.0
+  cost_ce: 0.5
   cost_bbox: 5.0
   cost_giou: 2.0
-  focal_alpha: 0.75
+  focal_alpha: 0.5
   focal_gamma: 2.0
-  # 当前诊断中 GT 主要集中在 class 10/6/8，而预测塌到 0/2。
-  # 先给少数/高频但未学到的类别更高权重，抑制 class 0 吸引子。
-  class_weights: [0.5, 1.0, 0.7, 1.2, 1.2, 1.0, 2.0, 1.0, 2.0, 1.2, 2.5, 1.0]
 
 cv:
   num_folds: 0

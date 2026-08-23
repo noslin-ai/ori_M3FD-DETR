@@ -6,6 +6,34 @@
 
 ---
 
+## v0.6.11 (patch) — 用正样本 CE 替代手写类别权重，修复单类塌缩
+
+**日期:** 2026-08-22  
+**目标:** v0.6.10 后模型从 class 0/2 塌缩转为几乎全预测 class 6，说明手写类别权重仍会把模型推向单一类别。改为对 Hungarian 匹配到的正样本 query 增加前景 CE 分类损失。
+
+### 现场证据
+
+```text
+pred: [(6, 6400)]
+gt:   [(10, 102), (6, 68), (8, 67), ...]
+GT recall@IoU0.5: any=0.0000 same_cls=0.0000
+```
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `models/losses/dino_loss.py` | 增强 | 对匹配到的正样本 query 增加 `loss_ce = cross_entropy(matched_logits, matched_labels)` |
+| `train.py` | 增强 | 从配置读取 `loss.cost_ce` |
+| `engine/trainer.py` | 增强 | 训练日志新增 `ce=` 分项 |
+| `configs/debug.yaml` / `configs/rush_v2.yaml` | 调参 | 移除手写 `class_weights`，改用 `cost_ce: 0.5`，`cost_class: 1.0`，`focal_alpha: 0.5` |
+
+### 原因
+
+Sigmoid focal 主要负责前景/背景和多标签式分类信号，但在当前短 debug 训练中容易被负样本和类别频次带偏。正样本 CE 只作用于 Hungarian 匹配到的 query，不影响 unmatched query，可更直接地教模型“这个框对应哪个类别”。
+
+---
+
 ## v0.6.10 (patch) — 类别权重仅作用于正样本，避免少数类负梯度被放大
 
 **日期:** 2026-08-22  

@@ -10,6 +10,7 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from ..detector.matcher import HungarianMatcher
 from .focal_loss import FocalLoss
@@ -37,12 +38,14 @@ class DINOLoss(nn.Module):
         focal_alpha=0.25,
         focal_gamma=2.0,
         class_weights=None,
+        cost_ce=0.0,
     ):
         super().__init__()
         self.num_classes = num_classes
         self.cost_class = cost_class
         self.cost_bbox = cost_bbox
         self.cost_giou = cost_giou
+        self.cost_ce = cost_ce
 
         # 匹配器
         self.matcher = HungarianMatcher(
@@ -105,31 +108,41 @@ class DINOLoss(nn.Module):
         # 3. 回归损失（仅对匹配到的 query）
         matched_boxes = []
         matched_targets = []
+        matched_logits = []
+        matched_labels = []
 
         for i, (src_idx, tgt_idx) in enumerate(indices):
             if src_idx.numel() > 0:
                 matched_boxes.append(pred_boxes[i, src_idx])
                 matched_targets.append(target_boxes[i][tgt_idx])
+                matched_logits.append(pred_logits[i, src_idx, :self.num_classes])
+                matched_labels.append(target_labels[i][tgt_idx].long())
 
         if matched_boxes:
             matched_boxes = torch.cat(matched_boxes)
             matched_targets = torch.cat(matched_targets)
+            matched_logits = torch.cat(matched_logits)
+            matched_labels = torch.cat(matched_labels)
 
             loss_bbox = box_l1_loss(matched_boxes, matched_targets)
             loss_giou = giou_loss(matched_boxes, matched_targets)
+            loss_ce = F.cross_entropy(matched_logits, matched_labels)
         else:
             loss_bbox = pred_boxes.sum() * 0.0
             loss_giou = pred_boxes.sum() * 0.0
+            loss_ce = pred_logits.sum() * 0.0
 
         # 4. 总损失
         total = (
             self.cost_class * loss_class
+            + self.cost_ce * loss_ce
             + self.cost_bbox * loss_bbox
             + self.cost_giou * loss_giou
         )
 
         return {
             "loss_class": loss_class.item(),
+            "loss_ce": loss_ce.item(),
             "loss_bbox": loss_bbox.item(),
             "loss_giou": loss_giou.item(),
             "loss": total,

@@ -48,12 +48,12 @@ scheduler:
 
 # ---- 损失 ----
 loss:
-  cost_class: 2.0
+  cost_class: 1.0
+  cost_ce: 0.5
   cost_bbox: 5.0
   cost_giou: 2.0
-  focal_alpha: 0.75          # 继续增强正样本梯度，抵抗 class 0/2 吸引子
+  focal_alpha: 0.5           # 增强正样本梯度，抵抗负样本压制
   focal_gamma: 2.0
-  class_weights: [0.5, 1.0, 0.7, 1.2, 1.2, 1.0, 2.0, 1.0, 2.0, 1.2, 2.5, 1.0]
 
 # ---- 5-Fold ----
 cv:

@@ -259,6 +259,7 @@ def main():
         focal_alpha=loss_cfg.get("focal_alpha", 0.25),
         focal_gamma=loss_cfg.get("focal_gamma", 2.0),
         class_weights=loss_cfg.get("class_weights"),
+        cost_ce=loss_cfg.get("cost_ce", 0.0),
     ).to(device)
 
     # ---- 优化器 & 调度器 ----
