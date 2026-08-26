@@ -115,6 +115,11 @@ def get_input_size(config):
     return height, width
 
 
+def get_normalize_rgb(config):
+    input_cfg = config.get("input", {})
+    return bool(input_cfg.get("normalize_rgb", False))
+
+
 def main():
     parser = argparse.ArgumentParser(description="M3F-DINO Training")
     parser.add_argument("--config", default="configs/m3f_dino.yaml")
@@ -160,8 +165,10 @@ def main():
         print("\n[1] Loading dataset...")
 
     input_size = get_input_size(config)
+    normalize_rgb = get_normalize_rgb(config)
     full_dataset = RGBIRDepthDataset(
-        config["dataset"]["root"], train=True, size=input_size
+        config["dataset"]["root"], train=True, size=input_size,
+        normalize_rgb=normalize_rgb,
     )
 
     if is_main:
@@ -258,6 +265,7 @@ def main():
         "num_classes": config["dataset"]["num_classes"],
         "use_dn": config["model"].get("use_dn", False),
         "image_size": input_size,
+        "normalize_rgb": normalize_rgb,
         "decoder_feature_level": config["model"].get("decoder_feature_level", -1),
     }
 

@@ -30,9 +30,15 @@ def diagnose(checkpoint, data_root, max_batches, device, batch_size):
     state = _safe_torch_load(checkpoint, map_location="cpu")
     cfg = state.get("cfg", {}) or {}
     image_size = tuple(cfg.get("image_size", (384, 640)))
+    normalize_rgb = bool(cfg.get("normalize_rgb", False))
     print("Checkpoint cfg:", cfg)
 
-    dataset = RGBIRDepthDataset(data_root, train=True, size=image_size)
+    dataset = RGBIRDepthDataset(
+        data_root,
+        train=True,
+        size=image_size,
+        normalize_rgb=normalize_rgb,
+    )
     loader = DataLoader(
         dataset, batch_size=batch_size, shuffle=False,
         num_workers=4, collate_fn=collate_fn, pin_memory=True,

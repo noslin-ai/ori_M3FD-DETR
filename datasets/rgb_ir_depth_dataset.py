@@ -24,7 +24,7 @@ class RGBIRDepthDataset(Dataset):
     输出适配 DETR / DINO 的 target 格式。
     """
 
-    def __init__(self, root, train=True, size=(384, 640)):
+    def __init__(self, root, train=True, size=(384, 640), normalize_rgb=False):
         # 竞赛 zip 解压后的实际目录名
         self.rgb_dir = os.path.join(root, "visible")
         self.ir_dir = os.path.join(root, "infrared")
@@ -32,6 +32,9 @@ class RGBIRDepthDataset(Dataset):
         self.label_dir = os.path.join(root, "labels")
 
         self.train = train
+        self.normalize_rgb = normalize_rgb
+        self.rgb_mean = torch.tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(3, 1, 1)
+        self.rgb_std = torch.tensor([0.229, 0.224, 0.225], dtype=torch.float32).view(3, 1, 1)
 
         # 以 visible 目录的文件列表为基准
         self.rgb_names = sorted(os.listdir(self.rgb_dir))
@@ -104,6 +107,9 @@ class RGBIRDepthDataset(Dataset):
         rgb = torch.from_numpy(rgb.copy()).permute(2, 0, 1).float() / 255.0
         ir = torch.from_numpy(ir.copy()).permute(2, 0, 1).float() / 255.0
         depth = torch.from_numpy(depth.copy()).float()
+
+        if self.normalize_rgb:
+            rgb = (rgb - self.rgb_mean) / self.rgb_std
 
         target = {
             "boxes": boxes,

@@ -34,6 +34,10 @@ def cfg_image_size(cfg):
     return tuple(cfg.get("image_size", (384, 640)))
 
 
+def cfg_normalize_rgb(cfg):
+    return bool(cfg.get("normalize_rgb", False))
+
+
 def main():
     parser = argparse.ArgumentParser(description="M3F-DETR 评估")
     parser.add_argument("--checkpoint", required=True, help="checkpoint 路径")
@@ -68,7 +72,12 @@ def main():
     state = _safe_torch_load(args.checkpoint, map_location="cpu")
     cfg = state.get("cfg", {}) if isinstance(state, dict) else {}
     image_size = cfg_image_size(cfg)
-    dataset = RGBIRDepthDataset(args.data_root, train=not args.no_labels, size=image_size)
+    dataset = RGBIRDepthDataset(
+        args.data_root,
+        train=not args.no_labels,
+        size=image_size,
+        normalize_rgb=cfg_normalize_rgb(cfg),
+    )
     loader = DataLoader(
         dataset,
         batch_size=args.batch_size,

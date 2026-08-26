@@ -39,6 +39,10 @@ def cfg_image_size(cfg):
     return tuple(cfg.get("image_size", (384, 640)))
 
 
+def cfg_normalize_rgb(cfg):
+    return bool(cfg.get("normalize_rgb", False))
+
+
 @torch.no_grad()
 def generate_submission(
     model,
@@ -196,7 +200,12 @@ def main():
     # ---- 数据集 ----
     print("\n[1] Loading test dataset...")
     # test mode: 不需要 labels
-    dataset = RGBIRDepthDataset(args.data_root, train=False, size=image_size)
+    dataset = RGBIRDepthDataset(
+        args.data_root,
+        train=False,
+        size=image_size,
+        normalize_rgb=cfg_normalize_rgb(cfg),
+    )
     loader = DataLoader(
         dataset,
         batch_size=args.batch_size,

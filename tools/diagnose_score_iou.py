@@ -64,8 +64,13 @@ def build_model(checkpoint, device, use_ema=False):
     return model
 
 
-def make_loader(data_root, split_dir, fold, batch_size, num_workers, image_size):
-    dataset = RGBIRDepthDataset(data_root, train=True, size=image_size)
+def make_loader(data_root, split_dir, fold, batch_size, num_workers, image_size, normalize_rgb):
+    dataset = RGBIRDepthDataset(
+        data_root,
+        train=True,
+        size=image_size,
+        normalize_rgb=normalize_rgb,
+    )
     val_file = os.path.join(split_dir, f"fold{fold}_val.txt")
     with open(val_file) as f:
         val_stems = set(line.strip() for line in f if line.strip())
@@ -91,7 +96,9 @@ def diagnose(args):
     device = args.device if torch.cuda.is_available() else "cpu"
     model = build_model(args.checkpoint, device, args.use_ema)
     state = _safe_torch_load(args.checkpoint, map_location="cpu")
-    image_size = tuple((state.get("cfg", {}) or {}).get("image_size", (384, 640)))
+    cfg = state.get("cfg", {}) or {}
+    image_size = tuple(cfg.get("image_size", (384, 640)))
+    normalize_rgb = bool(cfg.get("normalize_rgb", False))
     loader = make_loader(
         args.data_root,
         args.split_dir,
@@ -99,6 +106,7 @@ def diagnose(args):
         args.batch_size,
         args.num_workers,
         image_size,
+        normalize_rgb,
     )
 
     all_scores = []

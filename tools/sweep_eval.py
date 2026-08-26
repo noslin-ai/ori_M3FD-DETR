@@ -27,6 +27,7 @@ def load_model(checkpoint, device, backbone=None, num_classes=12):
     state = _safe_torch_load(checkpoint, map_location="cpu")
     cfg = state.get("cfg", {}) if isinstance(state, dict) else {}
     image_size = tuple(cfg.get("image_size", (384, 640)))
+    normalize_rgb = bool(cfg.get("normalize_rgb", False))
 
     backbone_name = backbone or cfg.get("backbone", "swin_large")
     model = M3F_DETR(
@@ -51,7 +52,7 @@ def load_model(checkpoint, device, backbone=None, num_classes=12):
     else:
         model.load_state_dict(strip_state_dict_prefixes({k: v for k, v in state.items() if k != "cfg"}))
     model.eval()
-    return model, image_size
+    return model, image_size, normalize_rgb
 
 
 def main():
@@ -74,8 +75,13 @@ def main():
     if device == "cuda" and not torch.cuda.is_available():
         device = "cpu"
 
-    model, image_size = load_model(args.checkpoint, device, args.backbone, args.num_classes)
-    dataset = RGBIRDepthDataset(args.data_root, train=True, size=image_size)
+    model, image_size, normalize_rgb = load_model(args.checkpoint, device, args.backbone, args.num_classes)
+    dataset = RGBIRDepthDataset(
+        args.data_root,
+        train=True,
+        size=image_size,
+        normalize_rgb=normalize_rgb,
+    )
     loader = DataLoader(
         dataset,
         batch_size=args.batch_size,

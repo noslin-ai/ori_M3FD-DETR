@@ -68,6 +68,7 @@ def diagnose(args):
     state = _safe_torch_load(args.checkpoint, map_location="cpu")
     cfg = state.get("cfg", {}) or {}
     image_size = tuple(cfg.get("image_size", (384, 640)))
+    normalize_rgb = bool(cfg.get("normalize_rgb", False))
     print("Checkpoint cfg:", cfg)
 
     model = M3F_DETR(
@@ -82,7 +83,12 @@ def diagnose(args):
     ).to(device).eval()
     model.load_state_dict(strip_state_dict_prefixes(state["model"]))
 
-    dataset = RGBIRDepthDataset(args.data_root, train=True, size=image_size)
+    dataset = RGBIRDepthDataset(
+        args.data_root,
+        train=True,
+        size=image_size,
+        normalize_rgb=normalize_rgb,
+    )
     loader = DataLoader(
         dataset,
         batch_size=args.batch_size,
