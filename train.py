@@ -273,6 +273,8 @@ def main():
         class_weights=loss_cfg.get("class_weights"),
         cost_ce=loss_cfg.get("cost_ce", 0.0),
         aux_loss_weight=loss_cfg.get("aux_loss_weight", 0.5),
+        quality_class_targets=loss_cfg.get("quality_class_targets", False),
+        quality_floor=loss_cfg.get("quality_floor", 0.05),
     ).to(device)
 
     # ---- 优化器 & 调度器 ----

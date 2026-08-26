@@ -1,0 +1,73 @@
+# Rush v5 quality -- continue from v4 and align class confidence with box quality.
+#
+# Recommended command:
+#   python -u train.py --config configs/rush_v5_quality.yaml --fold 1 \
+#     --resume checkpoints/rush_v4_mapfix/best.pth 2>&1 | tee rush_v5_quality_train.log
+
+dataset:
+  root: data/train
+  num_classes: 12
+
+input:
+  width: 800
+  height: 512
+
+model:
+  backbone: swin_tiny
+  pretrained: true
+  hidden_dim: 256
+  queries: 300
+  use_dn: false
+  decoder_feature_level: -2
+
+train:
+  epochs: 280
+  batch_size: 2
+  amp: true
+  ema: true
+  ema_decay: 0.9999
+  grad_clip: 0.1
+  stages:
+    - name: "quality_score_align"
+      epochs: 280
+      freeze: []
+      lr: 0.00002
+
+optimizer:
+  name: AdamW
+  lr: 0.00002
+  backbone_lr: 0.000002
+  weight_decay: 0.05
+
+scheduler:
+  type: warmup_cosine
+  warmup_epochs: 2
+
+loss:
+  cost_class: 0.75
+  cost_ce: 1.5
+  cost_bbox: 10.0
+  cost_giou: 5.0
+  focal_alpha: 0.75
+  focal_gamma: 2.0
+  aux_loss_weight: 0.15
+  quality_class_targets: true
+  quality_floor: 0.05
+
+cv:
+  num_folds: 5
+  split_dir: splits
+
+checkpoint:
+  save_dir: checkpoints/rush_v5_quality
+  save_freq: 5
+  best_metric: mAP50-95
+
+log:
+  log_interval: 50
+  tensorboard: false
+
+device: cuda
+seed: 42
+num_workers: 12
+compile: false

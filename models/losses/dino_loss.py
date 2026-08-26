@@ -17,6 +17,32 @@ from .focal_loss import FocalLoss
 from .box_loss import box_l1_loss, giou_loss
 
 
+def _box_iou_diag_cxcywh(boxes1, boxes2):
+    """Return diagonal IoU for matched cxcywh boxes."""
+    if boxes1.numel() == 0:
+        return boxes1.new_zeros((0,))
+
+    x11 = boxes1[:, 0] - boxes1[:, 2] / 2
+    y11 = boxes1[:, 1] - boxes1[:, 3] / 2
+    x12 = boxes1[:, 0] + boxes1[:, 2] / 2
+    y12 = boxes1[:, 1] + boxes1[:, 3] / 2
+
+    x21 = boxes2[:, 0] - boxes2[:, 2] / 2
+    y21 = boxes2[:, 1] - boxes2[:, 3] / 2
+    x22 = boxes2[:, 0] + boxes2[:, 2] / 2
+    y22 = boxes2[:, 1] + boxes2[:, 3] / 2
+
+    lt_x = torch.maximum(x11, x21)
+    lt_y = torch.maximum(y11, y21)
+    rb_x = torch.minimum(x12, x22)
+    rb_y = torch.minimum(y12, y22)
+
+    inter = (rb_x - lt_x).clamp(min=0) * (rb_y - lt_y).clamp(min=0)
+    area1 = (x12 - x11).clamp(min=0) * (y12 - y11).clamp(min=0)
+    area2 = (x22 - x21).clamp(min=0) * (y22 - y21).clamp(min=0)
+    return inter / (area1 + area2 - inter).clamp(min=1e-7)
+
+
 class DINOLoss(nn.Module):
     """DINO 训练损失。
 
@@ -40,6 +66,8 @@ class DINOLoss(nn.Module):
         class_weights=None,
         cost_ce=0.0,
         aux_loss_weight=0.5,
+        quality_class_targets=False,
+        quality_floor=0.05,
     ):
         super().__init__()
         self.num_classes = num_classes
@@ -48,6 +76,8 @@ class DINOLoss(nn.Module):
         self.cost_giou = cost_giou
         self.cost_ce = cost_ce
         self.aux_loss_weight = aux_loss_weight
+        self.quality_class_targets = quality_class_targets
+        self.quality_floor = quality_floor
 
         # 匹配器
         self.matcher = HungarianMatcher(
@@ -96,7 +126,15 @@ class DINOLoss(nn.Module):
         for i, (src_idx, tgt_idx) in enumerate(indices):
             if src_idx.numel() > 0:
                 labels = target_labels[i][tgt_idx].long()
-                target_onehot[i, src_idx, labels] = 1
+                if self.quality_class_targets:
+                    ious = _box_iou_diag_cxcywh(
+                        pred_boxes[i, src_idx].detach(),
+                        target_boxes[i][tgt_idx],
+                    )
+                    quality = ious.clamp(min=self.quality_floor, max=1.0)
+                    target_onehot[i, src_idx, labels] = quality
+                else:
+                    target_onehot[i, src_idx, labels] = 1
 
         # 分类损失：只使用前景 logits，保留模型最后一维背景 logit 以兼容旧 checkpoint。
         loss_class = self.focal_loss(
