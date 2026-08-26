@@ -13,8 +13,8 @@ dataset:
   num_classes: 12
 
 input:
-  width: 1024
-  height: 640
+  width: 800
+  height: 512
 
 model:
   backbone: swin_tiny
@@ -27,7 +27,7 @@ model:
 train:
   # rush_v3 best is around epoch 160; this continues 60 more epochs.
   epochs: 220
-  batch_size: 4
+  batch_size: 2
   amp: true
   ema: true
   ema_decay: 0.9999

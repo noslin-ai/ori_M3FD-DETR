@@ -21,7 +21,7 @@
 | `models/detector/transformer.py` / `models/detector/dino_detector.py` | 增强 | decoder 返回每层输出，检测头生成 `aux_outputs`；新增 `decoder_feature_level`，v4 使用 P4 而非最粗 P5 |
 | `models/losses/dino_loss.py` | 增强 | 对 decoder 中间层加入辅助监督，默认权重 `aux_loss_weight=0.5` |
 | `train.py` / `evaluate.py` / `inference.py` / `tools/*.py` | 修复 | 训练、验证、推理、诊断统一使用 checkpoint 中的 `image_size` |
-| `configs/rush_v4_mapfix.yaml` | 新增 | 从 `rush_v3_continue/best.pth` 继续训练，输入 `640x1024`，batch=4，LR=3e-5 |
+| `configs/rush_v4_mapfix.yaml` | 新增 | 从 `rush_v3_continue/best.pth` 继续训练，输入 `512x800`，batch=2，LR=3e-5 |
 
 ### 推荐运行
 
@@ -29,6 +29,8 @@
 python -u train.py --config configs/rush_v4_mapfix.yaml --fold 1 \
   --resume checkpoints/rush_v3_continue/best.pth 2>&1 | tee rush_v4_mapfix_train.log
 ```
+
+注：初版尝试 `640x1024/batch=4`，但 CMFA 在 P2 上做全局跨模态注意力，token 平方级显存过高，启动 epoch 161 时 OOM，因此 v4 配置改为更稳的 `512x800/batch=2`。
 
 ---
 
