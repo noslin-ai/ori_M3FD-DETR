@@ -67,6 +67,7 @@ def diagnose(args):
     device = args.device if torch.cuda.is_available() else "cpu"
     state = _safe_torch_load(args.checkpoint, map_location="cpu")
     cfg = state.get("cfg", {}) or {}
+    image_size = tuple(cfg.get("image_size", (384, 640)))
     print("Checkpoint cfg:", cfg)
 
     model = M3F_DETR(
@@ -76,10 +77,11 @@ def diagnose(args):
         backbone_name=cfg.get("backbone", "swin_tiny"),
         pretrained=False,
         use_dn=cfg.get("use_dn", False),
+        input_size=image_size,
     ).to(device).eval()
     model.load_state_dict(strip_state_dict_prefixes(state["model"]))
 
-    dataset = RGBIRDepthDataset(args.data_root, train=True)
+    dataset = RGBIRDepthDataset(args.data_root, train=True, size=image_size)
     loader = DataLoader(
         dataset,
         batch_size=args.batch_size,

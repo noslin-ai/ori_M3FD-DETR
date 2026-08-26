@@ -6,6 +6,32 @@
 
 ---
 
+## v0.7.2 (experiment) — 修复低 mAP 的训练信号与输入尺寸问题
+
+**日期:** 2026-08-26
+**目标:** 针对 `rush_v3_continue` 训练后 mAP 仍极低的问题，修复“好框低分、坏框高分”的训练信号不足，并让高分辨率输入配置真正生效。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `datasets/` | 纳入版本 | 将服务器上此前被 `.gitignore` 忽略但训练必需的数据集源码纳入 Git，避免复现断链 |
+| `datasets/rgb_ir_depth_dataset.py` | 修复 | 新增 `size` 参数，不再硬编码 `384x640` |
+| `models/backbone/rgb_backbone.py` / `models/m3f_detr.py` | 修复 | Swin backbone 接收 checkpoint/config 记录的 `image_size` |
+| `models/detector/transformer.py` / `models/detector/dino_detector.py` | 增强 | decoder 返回每层输出，检测头生成 `aux_outputs` |
+| `models/losses/dino_loss.py` | 增强 | 对 decoder 中间层加入辅助监督，默认权重 `aux_loss_weight=0.5` |
+| `train.py` / `evaluate.py` / `inference.py` / `tools/*.py` | 修复 | 训练、验证、推理、诊断统一使用 checkpoint 中的 `image_size` |
+| `configs/rush_v4_mapfix.yaml` | 新增 | 从 `rush_v3_continue/best.pth` 继续训练，输入 `640x1024`，batch=4，LR=3e-5 |
+
+### 推荐运行
+
+```bash
+python -u train.py --config configs/rush_v4_mapfix.yaml --fold 1 \
+  --resume checkpoints/rush_v3_continue/best.pth 2>&1 | tee rush_v4_mapfix_train.log
+```
+
+---
+
 ## v0.7.1 (experiment) — 新增 rush_v3 续训配置，优先拉高定位召回
 
 **日期:** 2026-08-26  

@@ -44,6 +44,7 @@ def main():
         state = _safe_torch_load(args.checkpoint, map_location="cpu")
         cfg = state.get("cfg", {}) or {}
         print("Load checkpoint:", args.checkpoint)
+    image_size = tuple(cfg.get("image_size", (384, 640)))
 
     model = M3F_DETR(
         num_classes=cfg.get("num_classes", 12),
@@ -52,6 +53,7 @@ def main():
         backbone_name=cfg.get("backbone", "swin_tiny"),
         pretrained=False,
         use_dn=cfg.get("use_dn", False),
+        input_size=image_size,
     ).to(device).eval()
 
     if args.checkpoint:

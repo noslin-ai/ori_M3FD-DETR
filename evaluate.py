@@ -30,6 +30,10 @@ from engine import evaluate_model, validate, collate_fn
 from utils.checkpoint import _safe_torch_load, strip_state_dict_prefixes
 
 
+def cfg_image_size(cfg):
+    return tuple(cfg.get("image_size", (384, 640)))
+
+
 def main():
     parser = argparse.ArgumentParser(description="M3F-DETR 评估")
     parser.add_argument("--checkpoint", required=True, help="checkpoint 路径")
@@ -61,7 +65,10 @@ def main():
 
     # ---- 数据集 ----
     print(f"\n[1] 加载数据: {args.data_root}")
-    dataset = RGBIRDepthDataset(args.data_root, train=not args.no_labels)
+    state = _safe_torch_load(args.checkpoint, map_location="cpu")
+    cfg = state.get("cfg", {}) if isinstance(state, dict) else {}
+    image_size = cfg_image_size(cfg)
+    dataset = RGBIRDepthDataset(args.data_root, train=not args.no_labels, size=image_size)
     loader = DataLoader(
         dataset,
         batch_size=args.batch_size,
@@ -74,9 +81,7 @@ def main():
 
     # ---- 模型 ----
     print("\n[2] 加载模型...")
-    # 先加载 checkpoint 获取模型配置
-    state = _safe_torch_load(args.checkpoint, map_location="cpu")
-    cfg = state.get("cfg", {}) if isinstance(state, dict) else {}
+    # checkpoint 已在加载数据前读取，用于同步验证输入尺寸。
 
     # 确定 backbone: 优先使用命令行参数 > checkpoint cfg > fallback
     backbone_name = args.backbone
@@ -97,6 +102,7 @@ def main():
         backbone_name=backbone_name,
         # 从 checkpoint 恢复 use_dn；旧 checkpoint 无该字段时回退 True 以兼容
         use_dn=cfg.get("use_dn", True),
+        input_size=image_size,
     ).to(device)
 
     # 加载权重（已在上面加载过一次用于读取 cfg）

@@ -60,6 +60,7 @@ class M3F_DETR(nn.Module):
         use_dn=True,
         backbone_name="swin_small",
         pretrained=False,
+        input_size=(384, 640),
     ):
         super().__init__()
 
@@ -67,7 +68,12 @@ class M3F_DETR(nn.Module):
         self.hidden_dim = hidden_dim
 
         # ---- 模态编码器 ----
-        self.rgb_backbone = RGBBackbone(backbone_name=backbone_name, pretrained=pretrained)
+        self.input_size = tuple(input_size)
+        self.rgb_backbone = RGBBackbone(
+            backbone_name=backbone_name,
+            pretrained=pretrained,
+            img_size=self.input_size,
+        )
 
         # 从 backbone 获取各层通道数（由 timm feature_info 提供，已通过 NHWC→NCHW 转换验证）
         backbone_channels = self.rgb_backbone.channels

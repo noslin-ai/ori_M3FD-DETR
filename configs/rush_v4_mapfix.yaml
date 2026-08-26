@@ -1,0 +1,75 @@
+# Rush v4 mapfix -- fix the low-mAP causes found after rush_v3.
+# Key changes:
+#   1) make config input size actually drive dataset/backbone;
+#   2) enable decoder auxiliary supervision in code;
+#   3) continue from rush_v3 with a smaller LR and safer batch size.
+#
+# Recommended command:
+#   python -u train.py --config configs/rush_v4_mapfix.yaml --fold 1 \
+#     --resume checkpoints/rush_v3_continue/best.pth 2>&1 | tee rush_v4_mapfix_train.log
+
+dataset:
+  root: data/train
+  num_classes: 12
+
+input:
+  width: 1024
+  height: 640
+
+model:
+  backbone: swin_tiny
+  pretrained: true
+  hidden_dim: 256
+  queries: 300
+  use_dn: false
+
+train:
+  # rush_v3 best is around epoch 160; this continues 60 more epochs.
+  epochs: 220
+  batch_size: 4
+  amp: true
+  ema: true
+  ema_decay: 0.9999
+  grad_clip: 0.1
+  stages:
+    - name: "mapfix_aux_highres"
+      epochs: 220
+      freeze: []
+      lr: 0.00003
+
+optimizer:
+  name: AdamW
+  lr: 0.00003
+  backbone_lr: 0.000003
+  weight_decay: 0.05
+
+scheduler:
+  type: warmup_cosine
+  warmup_epochs: 3
+
+loss:
+  cost_class: 1.0
+  cost_ce: 0.75
+  cost_bbox: 8.0
+  cost_giou: 4.0
+  focal_alpha: 0.5
+  focal_gamma: 2.0
+  aux_loss_weight: 0.5
+
+cv:
+  num_folds: 5
+  split_dir: splits
+
+checkpoint:
+  save_dir: checkpoints/rush_v4_mapfix
+  save_freq: 5
+  best_metric: mAP50-95
+
+log:
+  log_interval: 50
+  tensorboard: false
+
+device: cuda
+seed: 42
+num_workers: 12
+compile: false

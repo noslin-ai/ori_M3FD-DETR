@@ -161,24 +161,32 @@ class DINODetector(nn.Module):
             mask=attn_mask,  # DN attention mask: 限制原始 query 不可见 DN query
         )  # list of (Nq, B, C) per decoder layer
 
-        # 取最后一层结果
-        hs_final = hs[-1]  # (Nq, B, C)
-        hs_final = hs_final.transpose(0, 1)  # (B, Nq, C)
+        hs_layers = [layer.transpose(0, 1) for layer in hs]  # each: (B, Nq, C)
 
         # DN 后处理 (训练时去除 DN 部分)
         if dn_meta is not None:
-            hs_final, targets_out = dn_post_process(hs_final, targets, dn_meta)
+            dn_num = dn_meta["dn_num"]
+            hs_layers = [layer[:, :-dn_num] if dn_num > 0 else layer for layer in hs_layers]
+            _, targets_out = dn_post_process(hs[-1].transpose(0, 1), targets, dn_meta)
         else:
             targets_out = targets
 
-        # 分类 + 回归
+        # 分类 + 回归；最后一层作为主输出，中间层作为辅助监督。
+        hs_final = hs_layers[-1]
         pred_logits = self.class_head(hs_final)  # (B, Nq, num_classes+1)
         pred_boxes = self.box_head(hs_final)     # (B, Nq, 4)
+        aux_outputs = [
+            {
+                "pred_logits": self.class_head(layer),
+                "pred_boxes": self.box_head(layer),
+            }
+            for layer in hs_layers[:-1]
+        ]
 
         return {
             "pred_logits": pred_logits,
             "pred_boxes": pred_boxes,
             "targets": targets_out,
-            "aux_outputs": None,  # 后续可添加中间层输出
+            "aux_outputs": aux_outputs,
             "dn_meta": dn_meta,
         }

@@ -39,6 +39,7 @@ class DINOLoss(nn.Module):
         focal_gamma=2.0,
         class_weights=None,
         cost_ce=0.0,
+        aux_loss_weight=0.5,
     ):
         super().__init__()
         self.num_classes = num_classes
@@ -46,6 +47,7 @@ class DINOLoss(nn.Module):
         self.cost_bbox = cost_bbox
         self.cost_giou = cost_giou
         self.cost_ce = cost_ce
+        self.aux_loss_weight = aux_loss_weight
 
         # 匹配器
         self.matcher = HungarianMatcher(
@@ -61,7 +63,7 @@ class DINOLoss(nn.Module):
             class_weights=class_weights,
         )
 
-    def forward(self, outputs, targets):
+    def _loss_single(self, pred_logits, pred_boxes, targets):
         """
         Args:
             outputs: dict
@@ -74,8 +76,6 @@ class DINOLoss(nn.Module):
         Returns:
             dict: {loss_class, loss_bbox, loss_giou, loss}
         """
-        pred_logits = outputs["pred_logits"]
-        pred_boxes = outputs["pred_boxes"]
         B, Q = pred_logits.shape[:2]
         num_boxes = sum(t["boxes"].shape[0] for t in targets)
 
@@ -140,10 +140,46 @@ class DINOLoss(nn.Module):
             + self.cost_giou * loss_giou
         )
 
+        return loss_class, loss_ce, loss_bbox, loss_giou, total
+
+    def forward(self, outputs, targets):
+        """
+        Args:
+            outputs: dict
+                pred_logits: (B, Q, num_classes+1)
+                pred_boxes:  (B, Q, 4)
+                aux_outputs: optional list of intermediate decoder outputs
+            targets: list of dict
+                labels: (N_i,) 类别索引
+                boxes:  (N_i, 4) cxcywh 归一化
+
+        Returns:
+            dict: {loss_class, loss_bbox, loss_giou, loss}
+        """
+        loss_class, loss_ce, loss_bbox, loss_giou, total = self._loss_single(
+            outputs["pred_logits"],
+            outputs["pred_boxes"],
+            targets,
+        )
+
+        aux_total = outputs["pred_logits"].sum() * 0.0
+        aux_outputs = outputs.get("aux_outputs") or []
+        for aux in aux_outputs:
+            _, _, _, _, aux_loss = self._loss_single(
+                aux["pred_logits"],
+                aux["pred_boxes"],
+                targets,
+            )
+            aux_total = aux_total + aux_loss
+
+        if aux_outputs:
+            total = total + self.aux_loss_weight * aux_total / len(aux_outputs)
+
         return {
             "loss_class": loss_class.item(),
             "loss_ce": loss_ce.item(),
             "loss_bbox": loss_bbox.item(),
             "loss_giou": loss_giou.item(),
+            "loss_aux": aux_total.item() / max(len(aux_outputs), 1),
             "loss": total,
         }

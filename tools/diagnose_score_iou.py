@@ -44,6 +44,7 @@ def box_iou_cxcywh(boxes1, boxes2):
 def build_model(checkpoint, device, use_ema=False):
     state = _safe_torch_load(checkpoint, map_location="cpu")
     cfg = state.get("cfg", {}) or {}
+    image_size = tuple(cfg.get("image_size", (384, 640)))
     print("Checkpoint cfg:", cfg)
 
     model = M3F_DETR(
@@ -53,6 +54,7 @@ def build_model(checkpoint, device, use_ema=False):
         backbone_name=cfg.get("backbone", "swin_tiny"),
         pretrained=False,
         use_dn=cfg.get("use_dn", False),
+        input_size=image_size,
     ).to(device).eval()
 
     key = "ema" if use_ema and state.get("ema") else "model"
@@ -61,8 +63,8 @@ def build_model(checkpoint, device, use_ema=False):
     return model
 
 
-def make_loader(data_root, split_dir, fold, batch_size, num_workers):
-    dataset = RGBIRDepthDataset(data_root, train=True)
+def make_loader(data_root, split_dir, fold, batch_size, num_workers, image_size):
+    dataset = RGBIRDepthDataset(data_root, train=True, size=image_size)
     val_file = os.path.join(split_dir, f"fold{fold}_val.txt")
     with open(val_file) as f:
         val_stems = set(line.strip() for line in f if line.strip())
@@ -87,12 +89,15 @@ def make_loader(data_root, split_dir, fold, batch_size, num_workers):
 def diagnose(args):
     device = args.device if torch.cuda.is_available() else "cpu"
     model = build_model(args.checkpoint, device, args.use_ema)
+    state = _safe_torch_load(args.checkpoint, map_location="cpu")
+    image_size = tuple((state.get("cfg", {}) or {}).get("image_size", (384, 640)))
     loader = make_loader(
         args.data_root,
         args.split_dir,
         args.fold,
         args.batch_size,
         args.num_workers,
+        image_size,
     )
 
     all_scores = []

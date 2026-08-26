@@ -26,6 +26,7 @@ def parse_float_list(value):
 def load_model(checkpoint, device, backbone=None, num_classes=12):
     state = _safe_torch_load(checkpoint, map_location="cpu")
     cfg = state.get("cfg", {}) if isinstance(state, dict) else {}
+    image_size = tuple(cfg.get("image_size", (384, 640)))
 
     backbone_name = backbone or cfg.get("backbone", "swin_large")
     model = M3F_DETR(
@@ -34,6 +35,7 @@ def load_model(checkpoint, device, backbone=None, num_classes=12):
         num_queries=cfg.get("num_queries", 900),
         backbone_name=backbone_name,
         use_dn=cfg.get("use_dn", True),
+        input_size=image_size,
     ).to(device)
 
     if device != "cpu":
@@ -48,7 +50,7 @@ def load_model(checkpoint, device, backbone=None, num_classes=12):
     else:
         model.load_state_dict(strip_state_dict_prefixes({k: v for k, v in state.items() if k != "cfg"}))
     model.eval()
-    return model
+    return model, image_size
 
 
 def main():
@@ -71,7 +73,8 @@ def main():
     if device == "cuda" and not torch.cuda.is_available():
         device = "cpu"
 
-    dataset = RGBIRDepthDataset(args.data_root, train=True)
+    model, image_size = load_model(args.checkpoint, device, args.backbone, args.num_classes)
+    dataset = RGBIRDepthDataset(args.data_root, train=True, size=image_size)
     loader = DataLoader(
         dataset,
         batch_size=args.batch_size,
@@ -80,7 +83,6 @@ def main():
         collate_fn=collate_fn,
         pin_memory=True,
     )
-    model = load_model(args.checkpoint, device, args.backbone, args.num_classes)
 
     rows = []
     for nms_iou in parse_float_list(args.nms_ious):

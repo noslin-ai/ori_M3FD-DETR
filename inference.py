@@ -35,6 +35,10 @@ from engine.evaluator import class_aware_nms
 from utils.checkpoint import _safe_torch_load, strip_state_dict_prefixes
 
 
+def cfg_image_size(cfg):
+    return tuple(cfg.get("image_size", (384, 640)))
+
+
 @torch.no_grad()
 def generate_submission(
     model,
@@ -184,10 +188,15 @@ def main():
     print(f"  Device: {device}")
     print(f"  EMA: {args.use_ema}")
 
+    # 先加载 checkpoint 获取模型配置和输入尺寸。
+    state = _safe_torch_load(args.checkpoint, map_location="cpu")
+    cfg = state.get("cfg", {}) if isinstance(state, dict) else {}
+    image_size = cfg_image_size(cfg)
+
     # ---- 数据集 ----
     print("\n[1] Loading test dataset...")
     # test mode: 不需要 labels
-    dataset = RGBIRDepthDataset(args.data_root, train=False)
+    dataset = RGBIRDepthDataset(args.data_root, train=False, size=image_size)
     loader = DataLoader(
         dataset,
         batch_size=args.batch_size,
@@ -205,10 +214,6 @@ def main():
 
     # ---- 模型 ----
     print("\n[2] Loading model...")
-    # 先加载 checkpoint 获取模型配置
-    state = _safe_torch_load(args.checkpoint, map_location="cpu")
-    cfg = state.get("cfg", {}) if isinstance(state, dict) else {}
-
     # 确定 backbone: 优先使用命令行参数 > checkpoint cfg > fallback
     backbone_name = args.backbone
     if backbone_name is None:
@@ -225,6 +230,7 @@ def main():
         backbone_name=backbone_name,
         # 从 checkpoint 恢复 use_dn；旧 checkpoint 无该字段时回退 True 以兼容
         use_dn=cfg.get("use_dn", True),
+        input_size=image_size,
     ).to(device)
 
     # 加载权重（如果是 CPU 加载的 state 需确保到 device）

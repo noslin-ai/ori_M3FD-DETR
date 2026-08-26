@@ -29,9 +29,10 @@ from utils.checkpoint import _safe_torch_load, strip_state_dict_prefixes
 def diagnose(checkpoint, data_root, max_batches, device, batch_size):
     state = _safe_torch_load(checkpoint, map_location="cpu")
     cfg = state.get("cfg", {}) or {}
+    image_size = tuple(cfg.get("image_size", (384, 640)))
     print("Checkpoint cfg:", cfg)
 
-    dataset = RGBIRDepthDataset(data_root, train=True)
+    dataset = RGBIRDepthDataset(data_root, train=True, size=image_size)
     loader = DataLoader(
         dataset, batch_size=batch_size, shuffle=False,
         num_workers=4, collate_fn=collate_fn, pin_memory=True,
@@ -50,6 +51,7 @@ def diagnose(checkpoint, data_root, max_batches, device, batch_size):
             num_queries=cfg.get("num_queries", 900),
             backbone_name=cfg.get("backbone", "swin_tiny"),
             use_dn=cfg.get("use_dn", False),
+            input_size=image_size,
         ).to(device).eval()
         model.load_state_dict(strip_state_dict_prefixes(weights))
 

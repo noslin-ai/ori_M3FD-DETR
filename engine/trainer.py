@@ -71,6 +71,7 @@ def train_one_epoch(
     total_ce = 0.0
     total_bbox = 0.0
     total_giou = 0.0
+    total_aux = 0.0
     n_batches = len(loader)
 
     for i, batch in enumerate(loader):
@@ -113,6 +114,7 @@ def train_one_epoch(
         total_ce += float(loss_dict.get("loss_ce", 0.0))
         total_bbox += float(loss_dict.get("loss_bbox", 0.0))
         total_giou += float(loss_dict.get("loss_giou", 0.0))
+        total_aux += float(loss_dict.get("loss_aux", 0.0))
 
         if (i + 1) % log_interval == 0:
             avg = total_loss / (i + 1)
@@ -120,11 +122,13 @@ def train_one_epoch(
             avg_ce = total_ce / (i + 1)
             avg_bbox = total_bbox / (i + 1)
             avg_giou = total_giou / (i + 1)
+            avg_aux = total_aux / (i + 1)
             print(
                 f"    [{i+1}/{n_batches}] "
                 f"loss={loss.item():.4f} avg={avg:.4f} "
                 f"cls={avg_cls:.4f} ce={avg_ce:.4f} "
-                f"bbox={avg_bbox:.4f} giou={avg_giou:.4f}"
+                f"bbox={avg_bbox:.4f} giou={avg_giou:.4f} "
+                f"aux={avg_aux:.4f}"
             )
 
     return total_loss / max(n_batches, 1)

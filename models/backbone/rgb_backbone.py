@@ -53,7 +53,7 @@ class RGBBackbone(nn.Module):
         "swin_large":  "swin_large_patch4_window7_224",
     }
 
-    def __init__(self, backbone_name="swin_small", pretrained=False):
+    def __init__(self, backbone_name="swin_small", pretrained=False, img_size=(384, 640)):
         super().__init__()
 
         model_name = self._MODEL_MAP.get(backbone_name, backbone_name)
@@ -63,7 +63,7 @@ class RGBBackbone(nn.Module):
                 model_name,
                 pretrained=False,
                 features_only=True,
-                img_size=(384, 640),
+                img_size=img_size,
             )
             state = _load_backbone_state(pretrained)
             missing, unexpected = self.backbone.load_state_dict(state, strict=False)
@@ -74,7 +74,7 @@ class RGBBackbone(nn.Module):
                 model_name,
                 pretrained=pretrained,
                 features_only=True,
-                img_size=(384, 640),
+                img_size=img_size,
             )
 
         self.backbone.feature_info.out_indices = (0, 1, 2, 3)

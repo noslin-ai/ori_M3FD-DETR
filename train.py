@@ -108,6 +108,13 @@ def build_optimizer(model, config):
     ], weight_decay=weight_decay)
 
 
+def get_input_size(config):
+    input_cfg = config.get("input", {})
+    height = int(input_cfg.get("height", 384))
+    width = int(input_cfg.get("width", 640))
+    return height, width
+
+
 def main():
     parser = argparse.ArgumentParser(description="M3F-DINO Training")
     parser.add_argument("--config", default="configs/m3f_dino.yaml")
@@ -152,8 +159,9 @@ def main():
     if is_main:
         print("\n[1] Loading dataset...")
 
+    input_size = get_input_size(config)
     full_dataset = RGBIRDepthDataset(
-        config["dataset"]["root"], train=True
+        config["dataset"]["root"], train=True, size=input_size
     )
 
     if is_main:
@@ -214,6 +222,7 @@ def main():
         backbone_name=config["model"].get("backbone", "swin_large"),
         use_dn=config["model"].get("use_dn", False),
         pretrained=config["model"].get("pretrained", False),
+        input_size=input_size,
     ).to(device)
 
     if world_size > 1:
@@ -247,6 +256,7 @@ def main():
         "num_queries": config["model"]["queries"],
         "num_classes": config["dataset"]["num_classes"],
         "use_dn": config["model"].get("use_dn", False),
+        "image_size": input_size,
     }
 
     # ---- 损失 ----
@@ -260,6 +270,7 @@ def main():
         focal_gamma=loss_cfg.get("focal_gamma", 2.0),
         class_weights=loss_cfg.get("class_weights"),
         cost_ce=loss_cfg.get("cost_ce", 0.0),
+        aux_loss_weight=loss_cfg.get("aux_loss_weight", 0.5),
     ).to(device)
 
     # ---- 优化器 & 调度器 ----

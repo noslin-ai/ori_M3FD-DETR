@@ -76,6 +76,7 @@ class DINOTransformerDecoder(nn.Module):
 
     def forward(self, tgt, memory, pos=None, query_pos=None, tgt_mask=None):
         output = tgt
+        intermediate = []
         for layer in self.layers:
             output = layer(
                 output,
@@ -84,7 +85,8 @@ class DINOTransformerDecoder(nn.Module):
                 query_pos=query_pos,
                 tgt_mask=tgt_mask,
             )
-        return output
+            intermediate.append(output)
+        return intermediate
 
 
 class DINOTransformer(nn.Module):
@@ -158,6 +160,6 @@ class DINOTransformer(nn.Module):
             pos=pos,
             query_pos=query_embed,
             tgt_mask=tgt_mask,
-        )  # (Nq, B, C)
+        )  # list of (Nq, B, C)
 
-        return [hs]  # 返回 list 保持与多尺度输出的一致性
+        return hs
