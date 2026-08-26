@@ -22,6 +22,7 @@ model:
   hidden_dim: 256
   queries: 300
   use_dn: false
+  decoder_feature_level: -2
 
 train:
   # rush_v3 best is around epoch 160; this continues 60 more epochs.

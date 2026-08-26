@@ -78,6 +78,7 @@ def diagnose(args):
         pretrained=False,
         use_dn=cfg.get("use_dn", False),
         input_size=image_size,
+        decoder_feature_level=cfg.get("decoder_feature_level", -1),
     ).to(device).eval()
     model.load_state_dict(strip_state_dict_prefixes(state["model"]))
 

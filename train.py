@@ -223,6 +223,7 @@ def main():
         use_dn=config["model"].get("use_dn", False),
         pretrained=config["model"].get("pretrained", False),
         input_size=input_size,
+        decoder_feature_level=config["model"].get("decoder_feature_level", -1),
     ).to(device)
 
     if world_size > 1:
@@ -257,6 +258,7 @@ def main():
         "num_classes": config["dataset"]["num_classes"],
         "use_dn": config["model"].get("use_dn", False),
         "image_size": input_size,
+        "decoder_feature_level": config["model"].get("decoder_feature_level", -1),
     }
 
     # ---- 损失 ----

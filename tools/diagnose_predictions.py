@@ -52,6 +52,7 @@ def diagnose(checkpoint, data_root, max_batches, device, batch_size):
             backbone_name=cfg.get("backbone", "swin_tiny"),
             use_dn=cfg.get("use_dn", False),
             input_size=image_size,
+            decoder_feature_level=cfg.get("decoder_feature_level", -1),
         ).to(device).eval()
         model.load_state_dict(strip_state_dict_prefixes(weights))
 

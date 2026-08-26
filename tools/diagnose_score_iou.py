@@ -55,6 +55,7 @@ def build_model(checkpoint, device, use_ema=False):
         pretrained=False,
         use_dn=cfg.get("use_dn", False),
         input_size=image_size,
+        decoder_feature_level=cfg.get("decoder_feature_level", -1),
     ).to(device).eval()
 
     key = "ema" if use_ema and state.get("ema") else "model"

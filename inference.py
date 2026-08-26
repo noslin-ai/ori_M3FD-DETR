@@ -231,6 +231,7 @@ def main():
         # 从 checkpoint 恢复 use_dn；旧 checkpoint 无该字段时回退 True 以兼容
         use_dn=cfg.get("use_dn", True),
         input_size=image_size,
+        decoder_feature_level=cfg.get("decoder_feature_level", -1),
     ).to(device)
 
     # 加载权重（如果是 CPU 加载的 state 需确保到 device）

@@ -54,6 +54,7 @@ def main():
         pretrained=False,
         use_dn=cfg.get("use_dn", False),
         input_size=image_size,
+        decoder_feature_level=cfg.get("decoder_feature_level", -1),
     ).to(device).eval()
 
     if args.checkpoint:

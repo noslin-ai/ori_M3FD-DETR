@@ -61,6 +61,7 @@ class M3F_DETR(nn.Module):
         backbone_name="swin_small",
         pretrained=False,
         input_size=(384, 640),
+        decoder_feature_level=-1,
     ):
         super().__init__()
 
@@ -101,6 +102,7 @@ class M3F_DETR(nn.Module):
             hidden_dim=hidden_dim,
             num_queries=num_queries,
             use_dn=use_dn,
+            decoder_feature_level=decoder_feature_level,
         )
 
     def forward(self, rgb, ir, depth, targets=None):

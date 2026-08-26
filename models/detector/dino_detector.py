@@ -48,6 +48,7 @@ class DINODetector(nn.Module):
         dn_number=100,
         dn_label_noise=0.2,
         dn_box_noise=0.4,
+        decoder_feature_level=-1,
     ):
         super().__init__()
 
@@ -56,6 +57,7 @@ class DINODetector(nn.Module):
         self.num_queries = num_queries
         self.num_decoder_layers = num_decoder_layers
         self.use_dn = use_dn
+        self.decoder_feature_level = decoder_feature_level
 
         # Position Encoding
         self.position_embedding = PositionEmbeddingSine(hidden_dim // 2)
@@ -118,7 +120,7 @@ class DINODetector(nn.Module):
         # 取最后一层（最高层）做 position encoding
         # input_proj: Conv + GroupNorm 归一化特征，避免大数值淹没位置编码、
         # 注意力 logits 饱和导致训练中 query 互相塌缩
-        feat_flat = self.input_proj[0](features[-1])  # (B, C, H, W)
+        feat_flat = self.input_proj[0](features[self.decoder_feature_level])  # (B, C, H, W)
         pos_embed = self.position_embedding(feat_flat)  # (B, C, H, W)
         assert pos_embed.shape[1] == self.hidden_dim, (
             f"位置编码输出 {pos_embed.shape[1]} 通道 ≠ hidden_dim {self.hidden_dim}。"

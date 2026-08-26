@@ -18,7 +18,7 @@
 | `datasets/` | 纳入版本 | 将服务器上此前被 `.gitignore` 忽略但训练必需的数据集源码纳入 Git，避免复现断链 |
 | `datasets/rgb_ir_depth_dataset.py` | 修复 | 新增 `size` 参数，不再硬编码 `384x640` |
 | `models/backbone/rgb_backbone.py` / `models/m3f_detr.py` | 修复 | Swin backbone 接收 checkpoint/config 记录的 `image_size` |
-| `models/detector/transformer.py` / `models/detector/dino_detector.py` | 增强 | decoder 返回每层输出，检测头生成 `aux_outputs` |
+| `models/detector/transformer.py` / `models/detector/dino_detector.py` | 增强 | decoder 返回每层输出，检测头生成 `aux_outputs`；新增 `decoder_feature_level`，v4 使用 P4 而非最粗 P5 |
 | `models/losses/dino_loss.py` | 增强 | 对 decoder 中间层加入辅助监督，默认权重 `aux_loss_weight=0.5` |
 | `train.py` / `evaluate.py` / `inference.py` / `tools/*.py` | 修复 | 训练、验证、推理、诊断统一使用 checkpoint 中的 `image_size` |
 | `configs/rush_v4_mapfix.yaml` | 新增 | 从 `rush_v3_continue/best.pth` 继续训练，输入 `640x1024`，batch=4，LR=3e-5 |

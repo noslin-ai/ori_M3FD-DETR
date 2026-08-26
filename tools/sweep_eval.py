@@ -36,6 +36,7 @@ def load_model(checkpoint, device, backbone=None, num_classes=12):
         backbone_name=backbone_name,
         use_dn=cfg.get("use_dn", True),
         input_size=image_size,
+        decoder_feature_level=cfg.get("decoder_feature_level", -1),
     ).to(device)
 
     if device != "cpu":
