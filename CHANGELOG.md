@@ -6,6 +6,39 @@
 
 ---
 
+## v0.7.1 (experiment) — 新增 rush_v3 续训配置，优先拉高定位召回
+
+**日期:** 2026-08-26  
+**目标:** 基于 `rush_v2` 60 轮 checkpoint 继续训练，保留已恢复的类别分布，同时加强定位损失，观察 IoU@0.5 recall 和 mAP 是否继续提升。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `configs/rush_v3_continue.yaml` | 新增 | 从 `checkpoints/rush_v2/latest.pth` 续训到 160 epoch；保存到 `checkpoints/rush_v3_continue/` |
+
+### 关键配置
+
+```yaml
+train.epochs: 160
+train.batch_size: 8
+optimizer.lr: 0.00005
+optimizer.backbone_lr: 0.000005
+loss.cost_class: 1.0
+loss.cost_ce: 0.75
+loss.cost_bbox: 8.0
+loss.cost_giou: 4.0
+```
+
+### 推荐运行
+
+```bash
+python -u train.py --config configs/rush_v3_continue.yaml --fold 1 \
+  --resume checkpoints/rush_v2/latest.pth 2>&1 | tee rush_v3_continue_train.log
+```
+
+---
+
 ## v0.7.0 (experiment) — rush_v2 完整 60 轮训练 + 首次非零 mAP + 阈值/NMS 扫描 + 新提交
 
 **日期:** 2026-08-26  

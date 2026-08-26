@@ -1,0 +1,81 @@
+# Rush v3 continue —— 基于 rush_v2 60 轮 checkpoint 继续优化定位与分类
+# 推荐用法:
+#   python -u train.py --config configs/rush_v3_continue.yaml --fold 1 \
+#     --resume checkpoints/rush_v2/latest.pth 2>&1 | tee rush_v3_continue_train.log
+
+# ---- 数据集 ----
+dataset:
+  root: data/train
+  num_classes: 12
+
+# ---- 输入 ----
+input:
+  width: 1024
+  height: 640
+
+# ---- 模型 ----
+model:
+  backbone: swin_tiny
+  pretrained: true
+  hidden_dim: 256
+  queries: 300
+  use_dn: false
+
+# ---- 训练 ----
+train:
+  # resume 会从 rush_v2 的 epoch=60 继续，因此这里等价于再训 100 轮。
+  epochs: 160
+  batch_size: 8
+  amp: true
+  ema: true
+  ema_decay: 0.9999
+  grad_clip: 0.1
+  stages:
+    - name: "continue_stronger_localization"
+      epochs: 160
+      freeze: []
+      lr: 0.00005
+
+# ---- 优化器 ----
+optimizer:
+  name: AdamW
+  lr: 0.00005
+  backbone_lr: 0.000005
+  weight_decay: 0.05
+
+# ---- 学习率调度 ----
+scheduler:
+  type: warmup_cosine
+  warmup_epochs: 3
+
+# ---- 损失 ----
+loss:
+  # rush_v2 的类别已经不再完全塌缩，v3 优先加强定位召回。
+  cost_class: 1.0
+  cost_ce: 0.75
+  cost_bbox: 8.0
+  cost_giou: 4.0
+  focal_alpha: 0.5
+  focal_gamma: 2.0
+
+# ---- 5-Fold ----
+cv:
+  num_folds: 5
+  split_dir: splits
+
+# ---- Checkpoint ----
+checkpoint:
+  save_dir: checkpoints/rush_v3_continue
+  save_freq: 5
+  best_metric: mAP50-95
+
+# ---- 日志 ----
+log:
+  log_interval: 50
+  tensorboard: false
+
+# ---- 硬件 ----
+device: cuda
+seed: 42
+num_workers: 12
+compile: false
