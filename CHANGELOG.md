@@ -6,6 +6,108 @@
 
 ---
 
+## v0.7.0 (experiment) — rush_v2 完整 60 轮训练 + 首次非零 mAP + 阈值/NMS 扫描 + 新提交
+
+**日期:** 2026-08-26  
+**交接:** 本次为纯实验/评估操作，未改代码；记录续训、诊断、扫描、提交全流程，便于其他人接力。
+
+### 背景
+
+- 8/23 的 rush_v2 训练在 epoch 17 被中断（见 `.ipynb_checkpoints/rush_v2_train-checkpoint.log`）；8/24 notebook 重试因 CUDA 不可见失败（`torch.cuda.is_available()=False`，`rush_v2_train.log` 止于 CUDA 禁用提示）。
+- 8/26 容器重启后 GPU 恢复（RTX 5090；base python torch 2.12.1+cu130），当时无任何训练进程在跑。
+
+### 操作流程（复现命令）
+
+1. 续训（从 `checkpoints/rush_v2/latest.pth` 的 epoch 15 继续，至 60 轮跑完）：
+   ```bash
+   python -u train.py --config configs/rush_v2.yaml --fold 1 --resume checkpoints/rush_v2/latest.pth
+   ```
+   日志：`rush_v2_resume_train.log`（约 30 秒/epoch，约 35 分钟跑完剩余 46 轮）。
+2. 诊断（最终模型）：
+   ```bash
+   python tools/diagnose_predictions.py --checkpoint checkpoints/rush_v2/latest.pth
+   python tools/diagnose_iou.py --checkpoint checkpoints/rush_v2/latest.pth --conf-threshold 0.01
+   ```
+3. 阈值/NMS 扫描（全量训练集 2000 张，40 组）：
+   ```bash
+   python tools/sweep_eval.py --checkpoint checkpoints/rush_v2/latest.pth --data-root data/train --batch-size 4
+   ```
+   日志：`sweep_rush_v2.log`。
+4. 生成测试提交（用扫描最佳配置）：
+   ```bash
+   python inference.py --checkpoint checkpoints/rush_v2/latest.pth --data-root data/test --output submission_rush_v2_ep60 --conf-threshold 0.001 --nms-iou 0.5 --max-det 100 --zip submission_rush_v2_ep60.zip
+   ```
+
+### 训练结果
+
+| 指标 | epoch 15（续训起点） | epoch 60（结束） |
+|------|------|------|
+| loss | 2.45 | 1.84 |
+| cls | 0.093 | 0.074 |
+| ce | 1.03 | 0.59 |
+| bbox | 0.042 | 0.025 |
+| giou | 0.81 | 0.67 |
+
+- 验证（EMA，每 10 轮一次）：epoch 20 = mAP50-95 0.0001 / mAP50 0.0004（历史首次非零）；epoch 30 归零；epoch 40 = mAP50 0.0003；epoch 60 = mAP50-95 0.0001 / mAP50 0.0007（New Best）。
+- checkpoint：`checkpoints/rush_v2/{best,latest,final}.pth`（8/26 07:30，605M，cfg: swin_tiny / hidden 256 / 300 queries / use_dn=False）。
+
+### 诊断结论（最终模型）
+
+- 类别分布：pred 仅 class 10/8/0/6；GT 中 class 4（33 个）和 class 3（2 个）完全没出 → 少数类召回缺失。
+- 定位：GT recall@IoU0.5（同类别）= 22.5%；每图最佳框 IoU ≈ 0.53，但最高分框平均 IoU 仅 0.14 → 置信度排序与定位质量脱节。
+- 框形态：预测框偏高偏大（h 均值 0.157 vs GT 0.114）、中心偏右（cx 0.55 vs 0.48）。
+- 置信度：去背景 sigmoid 均值约 0.21（EMA 约 0.24）；conf 大于 0.5 的 query 仅 0~3.6%。
+
+### 阈值/NMS 扫描结果（40 组，全量训练集，数值偏乐观）
+
+| conf | nms | preds | mAP50-95 | mAP50 |
+|------|-----|-------|----------|-------|
+| 0.001 | 0.50 | 198802 | **0.0022** | **0.0096** |
+| 0.001 | 0.60 | 199820 | 0.0021 | 0.0092 |
+| 0.080 | 0.60 | 196324 | 0.0020 | 0.0077 |
+| 0.005 | 0.50 | 198795 | 0.0020 | 0.0085 |
+
+- 结论：低阈值 + nms 0.5~0.6 最优；提高阈值不改善 mAP（因置信度排序差）。
+- 注意：sweep 在含训练图的 2000 张上评估，仅用于配置间相对比较，不代表测试集真实分数。
+
+### 提交
+
+- `submission_rush_v2_ep60/`：1000 个 txt（格式 `class cx cy w h conf`），平均约 99.7 框/图。
+- `submission_rush_v2_ep60.zip`（1.9MB），可直接上传。
+- 本次用 raw model（非 EMA）与 sweep 一致；如需对比可加 `--use-ema` 再生成一版。
+
+### 结论与接力建议
+
+- 管线全通、训练收敛正常，但模型精度仍为 mAP 约 0.1~0.2%（验证/训练集）量级；主要瓶颈是**定位精度、少数类召回、置信度标定**。
+- 下一步建议（按优先级）：
+  1. 定位：检查 box head / 提高 GIoU 权重或延长训练；换更大预训练 backbone（swin_large）做 A/B。
+  2. 少数类：class 4/3 样本极少，考虑类别重采样、复制增强或 focal 调参。
+  3. 置信度排序：考虑 score 校准或排序损失。
+  4. 用 EMA checkpoint 与 raw 各出一版提交对比。
+- 服务器 GPU 当前空闲，可直接续跑；注意容器重启会杀掉 nohup 进程，但 checkpoint 每 5 轮保存。
+
+---
+
+## v0.6.12 (patch) — 提交后处理：同类别 NMS + 阈值扫描（补充记录）
+
+**日期:** 2026-08-23  
+**说明:** 该版本改动此前未写入 CHANGELOG，现补充记录，方便交接。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `engine/evaluator.py` | 增强 | 新增 `class_aware_nms`；`evaluate_model` 支持 `nms_iou` 参数 |
+| `evaluate.py` | 增强 | 新增 `--nms-iou` 参数 |
+| `inference.py` | 修复/增强 | 提交生成加入同类别 NMS（默认 IoU 0.6）；完善测试集提交 txt 生成 |
+| `tools/sweep_eval.py` | 新增 | 阈值 × NMS IoU 扫描脚本，输出每组 mAP |
+
+### 验证
+
+- 提交：`submission_rush_v2_nms/` + `submission_rush_v2_nms.zip`（8/23 23:30）。
+- 后续 v0.7.0 的 sweep 与提交即基于该后处理链路。
+
+---
 ## v0.6.11 (patch) — 用正样本 CE 替代手写类别权重，修复单类塌缩
 
 **日期:** 2026-08-22  
