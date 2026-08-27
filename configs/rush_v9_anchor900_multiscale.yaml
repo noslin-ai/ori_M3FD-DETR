@@ -1,0 +1,87 @@
+# Rush v9 anchor900 multiscale -- 15x20 grid with 3 anchor sizes per center.
+#
+# v8 improved the training curve but IoU diagnosis showed the single anchor
+# size was too restrictive. This run gives each spatial location small/medium/
+# large priors while keeping the multiscale decoder memory.
+#
+# Recommended command:
+#   python -u train.py --config configs/rush_v9_anchor900_multiscale.yaml --fold 1 \
+#     2>&1 | tee rush_v9_anchor900_multiscale_train.log
+
+dataset:
+  root: data/train
+  num_classes: 12
+
+input:
+  width: 800
+  height: 512
+  normalize_rgb: true
+
+model:
+  backbone: swin_tiny
+  pretrained: true
+  hidden_dim: 256
+  queries: 900
+  use_dn: false
+  decoder_feature_level: -2
+  decoder_feature_levels: [1, 2, 3]
+  use_anchor_boxes: true
+  anchor_box_size:
+    - [0.035, 0.070]
+    - [0.060, 0.120]
+    - [0.110, 0.220]
+
+train:
+  epochs: 220
+  batch_size: 2
+  amp: true
+  ema: true
+  ema_decay: 0.9999
+  grad_clip: 0.1
+  stages:
+    - name: "anchor900_multiscale_warmup"
+      epochs: 30
+      freeze: []
+      lr: 0.0001
+    - name: "anchor900_multiscale_finetune"
+      epochs: 220
+      freeze: []
+      lr: 0.00003
+
+optimizer:
+  name: AdamW
+  lr: 0.0001
+  backbone_lr: 0.00001
+  weight_decay: 0.05
+
+scheduler:
+  type: warmup_cosine
+  warmup_epochs: 3
+
+loss:
+  cost_class: 1.0
+  cost_ce: 1.25
+  cost_bbox: 8.0
+  cost_giou: 4.0
+  focal_alpha: 0.5
+  focal_gamma: 2.0
+  aux_loss_weight: 0.05
+  quality_class_targets: false
+
+cv:
+  num_folds: 5
+  split_dir: splits
+
+checkpoint:
+  save_dir: checkpoints/rush_v9_anchor900_multiscale
+  save_freq: 5
+  best_metric: mAP50-95
+
+log:
+  log_interval: 50
+  tensorboard: false
+
+device: cuda
+seed: 42
+num_workers: 12
+compile: false

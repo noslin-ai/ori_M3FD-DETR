@@ -124,28 +124,40 @@ class DINODetector(nn.Module):
 
     @staticmethod
     def _make_anchor_boxes(num_queries, box_size):
-        if num_queries == 300:
+        sizes = torch.as_tensor(box_size, dtype=torch.float32)
+        if sizes.ndim == 1:
+            sizes = sizes.view(1, 2)
+        if sizes.ndim != 2 or sizes.shape[1] != 2:
+            raise ValueError(
+                "anchor_box_size must be [w, h] or a list of [w, h] pairs"
+            )
+
+        num_sizes = sizes.shape[0]
+        num_centers = max(1, (num_queries + num_sizes - 1) // num_sizes)
+        if num_centers == 300:
             rows, cols = 15, 20
-        elif num_queries == 900:
+        elif num_centers == 900:
             rows, cols = 30, 30
+        elif num_centers == 100:
+            rows, cols = 10, 10
         else:
-            cols = int(num_queries ** 0.5)
-            rows = max(1, num_queries // max(cols, 1))
-            while rows * cols < num_queries:
+            cols = int(num_centers ** 0.5)
+            rows = max(1, num_centers // max(cols, 1))
+            while rows * cols < num_centers:
                 cols += 1
 
         ys = (torch.arange(rows, dtype=torch.float32) + 0.5) / rows
         xs = (torch.arange(cols, dtype=torch.float32) + 0.5) / cols
         yy, xx = torch.meshgrid(ys, xs, indexing="ij")
         centers = torch.stack([xx.reshape(-1), yy.reshape(-1)], dim=-1)
-        centers = centers[:num_queries]
-        if centers.shape[0] < num_queries:
-            pad = centers[-1:].repeat(num_queries - centers.shape[0], 1)
+        centers = centers[:num_centers]
+        if centers.shape[0] < num_centers:
+            pad = centers[-1:].repeat(num_centers - centers.shape[0], 1)
             centers = torch.cat([centers, pad], dim=0)
 
-        wh = torch.tensor(box_size, dtype=torch.float32).view(1, 2)
-        wh = wh.repeat(num_queries, 1)
-        return torch.cat([centers, wh], dim=-1).clamp(1e-4, 1 - 1e-4)
+        centers = centers[:, None, :].expand(-1, num_sizes, -1).reshape(-1, 2)
+        wh = sizes[None, :, :].expand(num_centers, -1, -1).reshape(-1, 2)
+        return torch.cat([centers, wh], dim=-1)[:num_queries].clamp(1e-4, 1 - 1e-4)
 
     def _select_levels(self, features):
         if self.decoder_feature_levels is None:

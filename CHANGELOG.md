@@ -6,6 +6,36 @@
 
 ---
 
+## v0.7.7 (experiment) — rush_v9：900 query 多尺度 anchor 修复 v8 尺寸瓶颈
+
+**日期:** 2026-08-27  
+**目标:** 针对 `rush_v8_anchor_multiscale` 第 10 轮 mAP 仍极低的问题，扩大 anchor 尺寸覆盖并提升每图候选密度。
+
+### 结果依据
+
+- `rush_v8_anchor_multiscale` epoch 10: `mAP@50-95=0.0001`, `mAP@50=0.0007`。
+- IoU 诊断显示仍有定位/排序信号，但不足以形成有效 mAP：
+  - `每图最佳 IoU(同类别)=0.3740`
+  - `GT recall@IoU0.5 same_cls=0.0336`
+  - 预测框高度均值 `0.0760`，GT 高度均值 `0.1178`，单一 anchor 尺寸偏窄。
+  - 预测类别仍集中在 class 10，后续需要继续观察类别恢复。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `models/detector/dino_detector.py` | 增强 | `anchor_box_size` 支持多个 `[w, h]` 尺寸；生成 `num_centers × num_sizes` anchor |
+| `configs/rush_v9_anchor900_multiscale.yaml` | 新增 | 使用 900 query = 15×20 网格 × 3 尺寸 anchor，继续使用 P3/P4/P5 多尺度 memory |
+
+### 推荐运行
+
+```bash
+python -u train.py --config configs/rush_v9_anchor900_multiscale.yaml --fold 1 \
+  2>&1 | tee rush_v9_anchor900_multiscale_train.log
+```
+
+---
+
 ## v0.7.6 (experiment) — rush_v8：多尺度 decoder memory + anchor box query
 
 **日期:** 2026-08-27  
