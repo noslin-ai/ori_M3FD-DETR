@@ -6,6 +6,72 @@
 
 ---
 
+## v0.7.5 (experiment) — rush_v7：归一化 RGB + 普通正样本分类目标继续训练
+
+**日期:** 2026-08-27  
+**目标:** 针对 `rush_v6_norm` 早期 mAP 仍接近 0 的问题，去掉从零训练阶段的 IoU 质量软标签，避免低 IoU 预测把正样本分类置信度长期压低。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `configs/rush_v7_norm_plain.yaml` | 新增 | 保留 `normalize_rgb: true`，关闭 `quality_class_targets`，降低 `aux_loss_weight` 到 0.05，并使用普通正样本分类目标训练 |
+
+### 原因记录
+
+- `rush_v6_norm` 在 epoch 30 附近验证仍几乎无 mAP 提升，训练日志中主损失下降但辅助损失较高。
+- `quality_class_targets` 会把匹配正样本的分类目标设为当前预测框 IoU；从零训练时 IoU 很低，等价于持续压低正样本置信度，不利于按置信度排序的 mAP。
+- `rush_v7_norm_plain` 改回普通正样本目标，先观察前 10/20 轮验证是否比 v6 更快产生有效检测。
+
+### 推荐运行
+
+```bash
+python -u train.py --config configs/rush_v7_norm_plain.yaml --fold 1 \
+  2>&1 | tee rush_v7_norm_plain_train.log
+```
+
+---
+
+## v0.7.4 (experiment) — rush_v6：为 pretrained Swin 增加 RGB ImageNet 归一化
+
+**日期:** 2026-08-27  
+**目标:** 修复 RGB 输入未按 ImageNet mean/std 归一化导致 pretrained Swin 特征分布不匹配的问题。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `datasets/rgb_ir_depth_dataset.py` | 修复 | 新增 `normalize_rgb` 选项，仅对 RGB 分支执行 ImageNet mean/std 归一化 |
+| `train.py` / `evaluate.py` / `inference.py` / `tools/*.py` | 修复 | 从配置或 checkpoint cfg 传递 `normalize_rgb`，保证训练、验证、推理一致 |
+| `configs/rush_v6_norm.yaml` | 新增 | 从零训练 normalized RGB 版本，保存到 `checkpoints/rush_v6_norm/` |
+
+### 结果记录
+
+- `rush_v6_norm` 运行到 epoch 36 左右后暂停，epoch 10/20/30 的 mAP 仍接近 0。
+- 该实验说明 RGB 归一化是必要修复，但单独修复仍不足以让 mAP 快速恢复，需要继续排查分类置信度/排序问题。
+
+---
+
+## v0.7.3 (experiment) — rush_v5：尝试 IoU 质量目标校准分类分数
+
+**日期:** 2026-08-26  
+**目标:** 针对 `rush_v4_mapfix` 的诊断现象“存在部分好框，但高分框 IoU 很低”，尝试让分类分数学习框质量。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `models/losses/dino_loss.py` | 增强 | 新增 `quality_class_targets` 和 `quality_floor`，可把 matched positive 分类目标设为预测框 IoU |
+| `train.py` | 增强 | 从 loss 配置读取质量目标参数并传入 `DINOLoss` |
+| `configs/rush_v5_quality.yaml` | 新增 | 从 `rush_v4_mapfix/best.pth` 继续训练，尝试质量分校准 |
+
+### 结果记录
+
+- `rush_v5_quality` 继续训练后 mAP 有轻微提升，但仍远低于预期。
+- 后续判断：质量软标签适合已有较好定位基础时做分数校准，不适合从零训练阶段直接启用。
+
+---
+
 ## v0.7.2 (experiment) — 修复低 mAP 的训练信号与输入尺寸问题
 
 **日期:** 2026-08-26
