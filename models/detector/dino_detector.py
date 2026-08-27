@@ -22,6 +22,11 @@ from .box_head import BoxHead
 from .dn_query import prepare_for_dn, dn_post_process
 
 
+def inverse_sigmoid(x, eps=1e-5):
+    x = x.clamp(min=eps, max=1 - eps)
+    return torch.log(x / (1 - x))
+
+
 class DINODetector(nn.Module):
     """DINO 检测器主体。
 
@@ -49,6 +54,9 @@ class DINODetector(nn.Module):
         dn_label_noise=0.2,
         dn_box_noise=0.4,
         decoder_feature_level=-1,
+        decoder_feature_levels=None,
+        use_anchor_boxes=False,
+        anchor_box_size=(0.06, 0.12),
     ):
         super().__init__()
 
@@ -58,9 +66,12 @@ class DINODetector(nn.Module):
         self.num_decoder_layers = num_decoder_layers
         self.use_dn = use_dn
         self.decoder_feature_level = decoder_feature_level
+        self.decoder_feature_levels = decoder_feature_levels
+        self.use_anchor_boxes = use_anchor_boxes
 
         # Position Encoding
         self.position_embedding = PositionEmbeddingSine(hidden_dim // 2)
+        self.level_embed = nn.Parameter(torch.zeros(4, hidden_dim))
 
         # Input Projection (多尺度特征 → hidden_dim)
         self.input_proj = nn.ModuleList([
@@ -90,6 +101,11 @@ class DINODetector(nn.Module):
         self.box_head = BoxHead(
             hidden_dim=hidden_dim,
         )
+        if use_anchor_boxes:
+            self.box_head.reset_delta_init()
+
+        anchors = self._make_anchor_boxes(num_queries, anchor_box_size)
+        self.register_buffer("anchor_boxes", anchors, persistent=False)
 
         # DN 相关
         if use_dn:
@@ -103,7 +119,76 @@ class DINODetector(nn.Module):
 
     def _init_weights(self):
         # 所有参数已在各子模块中初始化
+        nn.init.normal_(self.level_embed, std=0.02)
         pass
+
+    @staticmethod
+    def _make_anchor_boxes(num_queries, box_size):
+        if num_queries == 300:
+            rows, cols = 15, 20
+        elif num_queries == 900:
+            rows, cols = 30, 30
+        else:
+            cols = int(num_queries ** 0.5)
+            rows = max(1, num_queries // max(cols, 1))
+            while rows * cols < num_queries:
+                cols += 1
+
+        ys = (torch.arange(rows, dtype=torch.float32) + 0.5) / rows
+        xs = (torch.arange(cols, dtype=torch.float32) + 0.5) / cols
+        yy, xx = torch.meshgrid(ys, xs, indexing="ij")
+        centers = torch.stack([xx.reshape(-1), yy.reshape(-1)], dim=-1)
+        centers = centers[:num_queries]
+        if centers.shape[0] < num_queries:
+            pad = centers[-1:].repeat(num_queries - centers.shape[0], 1)
+            centers = torch.cat([centers, pad], dim=0)
+
+        wh = torch.tensor(box_size, dtype=torch.float32).view(1, 2)
+        wh = wh.repeat(num_queries, 1)
+        return torch.cat([centers, wh], dim=-1).clamp(1e-4, 1 - 1e-4)
+
+    def _select_levels(self, features):
+        if self.decoder_feature_levels is None:
+            levels = [self.decoder_feature_level]
+        else:
+            levels = list(self.decoder_feature_levels)
+
+        selected = []
+        for level in levels:
+            idx = level if level >= 0 else len(features) + level
+            if idx < 0 or idx >= len(features):
+                raise IndexError(
+                    f"decoder feature level {level} resolves to {idx}, "
+                    f"but only {len(features)} levels are available"
+                )
+            selected.append(idx)
+        return selected
+
+    def _flatten_features(self, features):
+        srcs, poss = [], []
+        for idx in self._select_levels(features):
+            feat = self.input_proj[0](features[idx])
+            pos_embed = self.position_embedding(feat)
+            assert pos_embed.shape[1] == self.hidden_dim, (
+                f"位置编码输出 {pos_embed.shape[1]} 通道 ≠ hidden_dim {self.hidden_dim}。"
+                f"请将 PositionEmbeddingSine 的 num_pos_feats 设为 hidden_dim//2={self.hidden_dim//2}")
+
+            level_pos = self.level_embed[idx].view(1, self.hidden_dim, 1, 1)
+            pos_embed = pos_embed + level_pos
+
+            srcs.append(feat.flatten(2).permute(2, 0, 1))
+            poss.append(pos_embed.flatten(2).permute(2, 0, 1))
+
+        return torch.cat(srcs, dim=0), torch.cat(poss, dim=0)
+
+    def _predict_boxes(self, hs):
+        if not self.use_anchor_boxes:
+            return self.box_head(hs)
+
+        raw = self.box_head.forward_logits(hs)
+        anchors = self.anchor_boxes[:hs.shape[1]].to(device=hs.device, dtype=hs.dtype)
+        anchors = anchors.unsqueeze(0).expand(hs.shape[0], -1, -1)
+        return torch.sigmoid(inverse_sigmoid(anchors) + raw)
 
     def forward(self, features, targets=None):
         """
@@ -117,19 +202,10 @@ class DINODetector(nn.Module):
                 pred_boxes: (B, num_queries, 4) 或 list of
                 dn_results: (可选) DN 相关的输出
         """
-        # 取最后一层（最高层）做 position encoding
-        # input_proj: Conv + GroupNorm 归一化特征，避免大数值淹没位置编码、
-        # 注意力 logits 饱和导致训练中 query 互相塌缩
-        feat_flat = self.input_proj[0](features[self.decoder_feature_level])  # (B, C, H, W)
-        pos_embed = self.position_embedding(feat_flat)  # (B, C, H, W)
-        assert pos_embed.shape[1] == self.hidden_dim, (
-            f"位置编码输出 {pos_embed.shape[1]} 通道 ≠ hidden_dim {self.hidden_dim}。"
-            f"请将 PositionEmbeddingSine 的 num_pos_feats 设为 hidden_dim//2={self.hidden_dim//2}")
-
-        # Flatten 特征
-        B, C, H, W = feat_flat.shape
-        src = feat_flat.flatten(2).permute(2, 0, 1)  # (HW, B, C)
-        pos = pos_embed.flatten(2).permute(2, 0, 1)  # (HW, B, C)
+        # input_proj: Conv + GroupNorm 归一化特征，避免大数值淹没位置编码。
+        # v8 可把 P3/P4/P5 等多尺度特征拼成 decoder memory，减轻单尺度定位瓶颈。
+        src, pos = self._flatten_features(features)
+        B = src.shape[1]
 
         # Object queries
         query_embed = self.query_embed.weight.unsqueeze(1).repeat(1, B, 1)  # (Nq, B, C)
@@ -176,11 +252,11 @@ class DINODetector(nn.Module):
         # 分类 + 回归；最后一层作为主输出，中间层作为辅助监督。
         hs_final = hs_layers[-1]
         pred_logits = self.class_head(hs_final)  # (B, Nq, num_classes+1)
-        pred_boxes = self.box_head(hs_final)     # (B, Nq, 4)
+        pred_boxes = self._predict_boxes(hs_final)     # (B, Nq, 4)
         aux_outputs = [
             {
                 "pred_logits": self.class_head(layer),
-                "pred_boxes": self.box_head(layer),
+                "pred_boxes": self._predict_boxes(layer),
             }
             for layer in hs_layers[:-1]
         ]

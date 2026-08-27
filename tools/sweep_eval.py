@@ -23,6 +23,15 @@ def parse_float_list(value):
     return [float(x.strip()) for x in value.split(",") if x.strip()]
 
 
+def cfg_detector_kwargs(cfg):
+    return {
+        "decoder_feature_level": cfg.get("decoder_feature_level", -1),
+        "decoder_feature_levels": cfg.get("decoder_feature_levels"),
+        "use_anchor_boxes": bool(cfg.get("use_anchor_boxes", False)),
+        "anchor_box_size": tuple(cfg.get("anchor_box_size", (0.06, 0.12))),
+    }
+
+
 def load_model(checkpoint, device, backbone=None, num_classes=12):
     state = _safe_torch_load(checkpoint, map_location="cpu")
     cfg = state.get("cfg", {}) if isinstance(state, dict) else {}
@@ -37,7 +46,7 @@ def load_model(checkpoint, device, backbone=None, num_classes=12):
         backbone_name=backbone_name,
         use_dn=cfg.get("use_dn", True),
         input_size=image_size,
-        decoder_feature_level=cfg.get("decoder_feature_level", -1),
+        **cfg_detector_kwargs(cfg),
     ).to(device)
 
     if device != "cpu":

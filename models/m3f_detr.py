@@ -62,6 +62,9 @@ class M3F_DETR(nn.Module):
         pretrained=False,
         input_size=(384, 640),
         decoder_feature_level=-1,
+        decoder_feature_levels=None,
+        use_anchor_boxes=False,
+        anchor_box_size=(0.06, 0.12),
     ):
         super().__init__()
 
@@ -103,6 +106,9 @@ class M3F_DETR(nn.Module):
             num_queries=num_queries,
             use_dn=use_dn,
             decoder_feature_level=decoder_feature_level,
+            decoder_feature_levels=decoder_feature_levels,
+            use_anchor_boxes=use_anchor_boxes,
+            anchor_box_size=anchor_box_size,
         )
 
     def forward(self, rgb, ir, depth, targets=None):

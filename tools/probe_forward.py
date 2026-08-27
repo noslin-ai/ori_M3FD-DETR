@@ -23,6 +23,15 @@ from models.m3f_detr import M3F_DETR
 from utils.checkpoint import _safe_torch_load, strip_state_dict_prefixes
 
 
+def cfg_detector_kwargs(cfg):
+    return {
+        "decoder_feature_level": cfg.get("decoder_feature_level", -1),
+        "decoder_feature_levels": cfg.get("decoder_feature_levels"),
+        "use_anchor_boxes": bool(cfg.get("use_anchor_boxes", False)),
+        "anchor_box_size": tuple(cfg.get("anchor_box_size", (0.06, 0.12))),
+    }
+
+
 def spatial_std(t):
     """跨空间位置的标准差，平均到每个 (B, C) 通道。"""
     return t.std(dim=tuple(range(2, t.dim()))).mean().item()
@@ -54,7 +63,7 @@ def main():
         pretrained=False,
         use_dn=cfg.get("use_dn", False),
         input_size=image_size,
-        decoder_feature_level=cfg.get("decoder_feature_level", -1),
+        **cfg_detector_kwargs(cfg),
     ).to(device).eval()
 
     if args.checkpoint:
@@ -85,7 +94,7 @@ def main():
         print(f"[FPN]       out{i} shape={tuple(f.shape)} "
               f"spatial_std={spatial_std(f):.6f}")
 
-    # 1) 位置编码是否退化（每个位置是否相同），用 decoder 实际输入的特征尺寸
+    # 1) 位置编码是否退化（每个位置是否相同），用最后层做单层参考输出
     pe = PositionEmbeddingSine(model.hidden_dim // 2).to(device)
     pos = pe(fpn_out[-1])
     print(f"[PE]        shape={tuple(pos.shape)} spatial_std={spatial_std(pos):.6f}"
@@ -98,10 +107,7 @@ def main():
           "  <- 若≈0，query 已互相塌缩")
 
     # 5) decoder 输出跨 query 方差
-    src = det.input_proj[0](fpn_out[-1])   # 与模型实际 forward 一致
-    pos_emb = det.position_embedding(src)
-    src_flat = src.flatten(2).permute(2, 0, 1)      # (HW, B, C)
-    pos_flat = pos_emb.flatten(2).permute(2, 0, 1)  # (HW, B, C)
+    src_flat, pos_flat = det._flatten_features(fpn_out)
     print(f"[MEMORY]    src spatial_std={src_flat.std(dim=0).mean().item():.6f} "
           f"pos spatial_std={pos_flat.std(dim=0).mean().item():.6f}")
 

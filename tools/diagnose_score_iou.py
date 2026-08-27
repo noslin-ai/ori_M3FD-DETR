@@ -22,6 +22,15 @@ from models.m3f_detr import M3F_DETR
 from utils.checkpoint import _safe_torch_load, strip_state_dict_prefixes
 
 
+def cfg_detector_kwargs(cfg):
+    return {
+        "decoder_feature_level": cfg.get("decoder_feature_level", -1),
+        "decoder_feature_levels": cfg.get("decoder_feature_levels"),
+        "use_anchor_boxes": bool(cfg.get("use_anchor_boxes", False)),
+        "anchor_box_size": tuple(cfg.get("anchor_box_size", (0.06, 0.12))),
+    }
+
+
 def box_iou_cxcywh(boxes1, boxes2):
     if boxes1.numel() == 0 or boxes2.numel() == 0:
         return boxes1.new_zeros((boxes1.shape[0], boxes2.shape[0]))
@@ -55,7 +64,7 @@ def build_model(checkpoint, device, use_ema=False):
         pretrained=False,
         use_dn=cfg.get("use_dn", False),
         input_size=image_size,
-        decoder_feature_level=cfg.get("decoder_feature_level", -1),
+        **cfg_detector_kwargs(cfg),
     ).to(device).eval()
 
     key = "ema" if use_ema and state.get("ema") else "model"

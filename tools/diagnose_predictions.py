@@ -25,6 +25,15 @@ from models.m3f_detr import M3F_DETR
 from utils.checkpoint import _safe_torch_load, strip_state_dict_prefixes
 
 
+def cfg_detector_kwargs(cfg):
+    return {
+        "decoder_feature_level": cfg.get("decoder_feature_level", -1),
+        "decoder_feature_levels": cfg.get("decoder_feature_levels"),
+        "use_anchor_boxes": bool(cfg.get("use_anchor_boxes", False)),
+        "anchor_box_size": tuple(cfg.get("anchor_box_size", (0.06, 0.12))),
+    }
+
+
 @torch.no_grad()
 def diagnose(checkpoint, data_root, max_batches, device, batch_size):
     state = _safe_torch_load(checkpoint, map_location="cpu")
@@ -58,7 +67,7 @@ def diagnose(checkpoint, data_root, max_batches, device, batch_size):
             backbone_name=cfg.get("backbone", "swin_tiny"),
             use_dn=cfg.get("use_dn", False),
             input_size=image_size,
-            decoder_feature_level=cfg.get("decoder_feature_level", -1),
+            **cfg_detector_kwargs(cfg),
         ).to(device).eval()
         model.load_state_dict(strip_state_dict_prefixes(weights))
 

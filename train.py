@@ -120,6 +120,17 @@ def get_normalize_rgb(config):
     return bool(input_cfg.get("normalize_rgb", False))
 
 
+def get_detector_cfg(config):
+    model_cfg = config.get("model", {})
+    anchor_box_size = model_cfg.get("anchor_box_size", (0.06, 0.12))
+    return {
+        "decoder_feature_level": model_cfg.get("decoder_feature_level", -1),
+        "decoder_feature_levels": model_cfg.get("decoder_feature_levels"),
+        "use_anchor_boxes": bool(model_cfg.get("use_anchor_boxes", False)),
+        "anchor_box_size": tuple(anchor_box_size),
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="M3F-DINO Training")
     parser.add_argument("--config", default="configs/m3f_dino.yaml")
@@ -166,6 +177,7 @@ def main():
 
     input_size = get_input_size(config)
     normalize_rgb = get_normalize_rgb(config)
+    detector_cfg = get_detector_cfg(config)
     full_dataset = RGBIRDepthDataset(
         config["dataset"]["root"], train=True, size=input_size,
         normalize_rgb=normalize_rgb,
@@ -230,7 +242,7 @@ def main():
         use_dn=config["model"].get("use_dn", False),
         pretrained=config["model"].get("pretrained", False),
         input_size=input_size,
-        decoder_feature_level=config["model"].get("decoder_feature_level", -1),
+        **detector_cfg,
     ).to(device)
 
     if world_size > 1:
@@ -266,7 +278,7 @@ def main():
         "use_dn": config["model"].get("use_dn", False),
         "image_size": input_size,
         "normalize_rgb": normalize_rgb,
-        "decoder_feature_level": config["model"].get("decoder_feature_level", -1),
+        **detector_cfg,
     }
 
     # ---- 损失 ----

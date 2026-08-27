@@ -6,6 +6,36 @@
 
 ---
 
+## v0.7.6 (experiment) — rush_v8：多尺度 decoder memory + anchor box query
+
+**日期:** 2026-08-27  
+**目标:** 针对 mAP 长期远低于预期的问题，从网络结构层面修复“单尺度 decoder + 随机 query 直接回归绝对框”的定位瓶颈。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `models/detector/box_head.py` | 增强 | 保留旧 sigmoid 框输出，同时新增 `forward_logits()` 和 delta 初始化方法，支持 anchor residual box prediction |
+| `models/detector/dino_detector.py` | 结构改造 | 新增多尺度 `decoder_feature_levels`，可将 P3/P4/P5 拼成 decoder memory；新增固定 anchor boxes，框头预测 anchor 残差 |
+| `models/m3f_detr.py` | 结构接入 | 将多尺度 decoder 和 anchor 参数从主模型传入 detector |
+| `train.py` / `evaluate.py` / `inference.py` / `tools/*.py` | 兼容 | 训练保存并恢复新 detector 配置，评估、提交、诊断与训练结构保持一致 |
+| `configs/rush_v8_anchor_multiscale.yaml` | 新增 | 启用 RGB 归一化、多尺度 decoder memory、anchor boxes，保存到 `checkpoints/rush_v8_anchor_multiscale/` |
+
+### 原因记录
+
+- 旧 detector 虽命名为 DINO，但实际只把一个 FPN 层送入普通 Transformer decoder，没有多尺度 memory，也没有 reference point / anchor 约束。
+- `BoxHead` 直接从随机 query embedding 输出 `cx, cy, w, h`，在小数据集上从零学习绝对坐标很慢，容易出现 good box 排名低、top1 IoU 很差的问题。
+- v8 让 query 从规则网格 anchor 出发预测残差，并让 decoder 同时看 P3/P4/P5，优先解决定位召回和高分框排序问题。
+
+### 推荐运行
+
+```bash
+python -u train.py --config configs/rush_v8_anchor_multiscale.yaml --fold 1 \
+  2>&1 | tee rush_v8_anchor_multiscale_train.log
+```
+
+---
+
 ## v0.7.5 (experiment) — rush_v7：归一化 RGB + 普通正样本分类目标继续训练
 
 **日期:** 2026-08-27  

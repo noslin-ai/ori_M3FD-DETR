@@ -62,6 +62,15 @@ def summarize_tensor(name, value):
         print("    " + " | ".join(parts))
 
 
+def cfg_detector_kwargs(cfg):
+    return {
+        "decoder_feature_level": cfg.get("decoder_feature_level", -1),
+        "decoder_feature_levels": cfg.get("decoder_feature_levels"),
+        "use_anchor_boxes": bool(cfg.get("use_anchor_boxes", False)),
+        "anchor_box_size": tuple(cfg.get("anchor_box_size", (0.06, 0.12))),
+    }
+
+
 @torch.no_grad()
 def diagnose(args):
     device = args.device if torch.cuda.is_available() else "cpu"
@@ -79,7 +88,7 @@ def diagnose(args):
         pretrained=False,
         use_dn=cfg.get("use_dn", False),
         input_size=image_size,
-        decoder_feature_level=cfg.get("decoder_feature_level", -1),
+        **cfg_detector_kwargs(cfg),
     ).to(device).eval()
     model.load_state_dict(strip_state_dict_prefixes(state["model"]))
 

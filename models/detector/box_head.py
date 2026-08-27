@@ -7,6 +7,7 @@
 """
 
 import torch.nn as nn
+import torch
 
 
 class BoxHead(nn.Module):
@@ -25,6 +26,14 @@ class BoxHead(nn.Module):
             nn.Sigmoid(),  # 归一化到 [0, 1]
         )
 
+    def forward_logits(self, x):
+        return self.net[:-1](x)
+
+    def reset_delta_init(self):
+        final = self.net[2]
+        nn.init.constant_(final.weight, 0)
+        nn.init.constant_(final.bias, 0)
+
     def forward(self, x):
         """
         Args:
@@ -33,4 +42,4 @@ class BoxHead(nn.Module):
         Returns:
             boxes: (B, num_queries, 4) — (cx, cy, w, h) 归一化坐标
         """
-        return self.net(x)
+        return torch.sigmoid(self.forward_logits(x))

@@ -38,6 +38,15 @@ def cfg_normalize_rgb(cfg):
     return bool(cfg.get("normalize_rgb", False))
 
 
+def cfg_detector_kwargs(cfg):
+    return {
+        "decoder_feature_level": cfg.get("decoder_feature_level", -1),
+        "decoder_feature_levels": cfg.get("decoder_feature_levels"),
+        "use_anchor_boxes": bool(cfg.get("use_anchor_boxes", False)),
+        "anchor_box_size": tuple(cfg.get("anchor_box_size", (0.06, 0.12))),
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="M3F-DETR 评估")
     parser.add_argument("--checkpoint", required=True, help="checkpoint 路径")
@@ -112,7 +121,7 @@ def main():
         # 从 checkpoint 恢复 use_dn；旧 checkpoint 无该字段时回退 True 以兼容
         use_dn=cfg.get("use_dn", True),
         input_size=image_size,
-        decoder_feature_level=cfg.get("decoder_feature_level", -1),
+        **cfg_detector_kwargs(cfg),
     ).to(device)
 
     # 加载权重（已在上面加载过一次用于读取 cfg）
