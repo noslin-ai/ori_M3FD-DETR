@@ -55,6 +55,53 @@ python tools/infer_yolo.py --checkpoint checkpoints/yolo_fusion/best.pth \
 
 ---
 
+## v0.9.0 (experiment) — 双分支 + P3-P5 注意力融合（方案 B）
+
+**日期:** 2026-08-28  
+**类型:** 结构升级实验  
+**目标:** 早期融合（5ch 拼接，fusion 0.178）未跑赢 RGB-only（0.297）后，升级为双分支架构：RGB 与 IR+Depth 各用独立预训练 backbone 提特征，在 P3/P4/P5 用 CrossModalFusion 做通道+空间注意力融合，期望充分利用红外（温差突出目标）与深度（几何结构）的特性。
+
+### 结构设计
+
+```
+RGB(3ch) ──▶ backbone_rgb（yolo11n 预训练）──▶ P3/P4/P5 ─┐
+                                                          ├─▶ CrossModalFusion×3 ─▶ Detect head(12类)
+IR+Depth(2ch) ─▶ backbone_aux（yolo11n 预训练）──▶ P3/P4/P5 ┘
+```
+
+`CrossModalFusion`（`yolo/fusion.py`）对每个尺度：
+1. 通道注意力：两分支拼接后全局池化 → MLP → sigmoid，重标定 RGB 特征；
+2. 空间注意力：拼接特征 1x1 卷积 → sigmoid，突出共同关注区域；
+3. 残差融合：1x1 投影跨模态残差，稳定训练。
+
+### 关键修复（顺带闭环）
+
+- **stem 权重迁移 bug**：旧实现把"目标模型随机 stem 的前 3 通道"当作预训练权重复制给新增通道，导致 5ch fusion 的 stem 实际全随机。v0.9.0 改为：前 3 通道直接继承官方预训练 RGB 权重，新增/辅助通道用预训练 RGB 均值初始化（`yolo/model.py::_init_stem_from_pretrained`）。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `yolo/fusion.py` | 新增 | `CrossModalFusion` 跨模态注意力融合单元 |
+| `yolo/model.py` | 增强 | `DualBranchYOLO`、`build_dual_yolo_model`；`apply_freeze` 支持前缀冻结；修复 stem 迁移 |
+| `yolo/dataset.py` | 增强 | `mode=dual` 输出 5ch（与 fusion 相同，模型内部拆分） |
+| `tools/train_yolo.py` | 增强 | 支持 `model.arch=dual`；优化器把 head/fusion 归入完整 lr 组 |
+| `tools/infer_yolo.py` | 增强 | 从 checkpoint cfg 恢复 `arch` |
+| `configs/yolo_dual.yaml` | 新增 | 双分支训练配置（冻结双 backbone，100 epoch） |
+
+### 冒烟验证（GPU，2026-08-28）
+
+- 构建：RGB 分支迁移 448 键、Aux 分支 447 键；总参数 5.08M（冻结 backbone 后可训练 0.76M）；
+- 训练一步：loss 47.9，反向传播正常；
+- 推理：eval 输出 `(B, 16, N)` 正常；
+- 小验证集：链路可跑通（随机头 mAP≈0，符合预期）。
+
+### 状态
+
+训练中（100 epoch，冻结 backbone_rgb/backbone_aux，只训 fusion+head），结果待验证后更新。
+
+---
+
 ## v0.8.1 (breakthrough) — YOLO 方案首次出分：RGB 基线验证集 mAP@50-95 ≈ 0.30
 
 **日期:** 2026-08-28  

@@ -1,0 +1,52 @@
+# YOLO 双分支 + P3-P5 注意力融合配置（v0.9.0）
+# 结构: RGB(3ch) 独立 backbone + IR/Depth(2ch) 独立 backbone，
+#       在 P3/P4/P5 用 CrossModalFusion 做通道+空间注意力融合，
+#       融合特征送入 yolo11 Detect 头。
+# 用法: python tools/train_yolo.py --config configs/yolo_dual.yaml --fold 1
+
+dataset:
+  root: data/train
+  num_classes: 12
+  mode: dual            # 数据侧输出 5ch [RGB(3), IR(1), Depth(1)]，模型内部拆分双分支
+
+input:
+  width: 640
+  height: 384
+
+model:
+  arch: dual
+  pretrained: yolo11n.pt
+  freeze: [backbone_rgb, backbone_aux]   # 先冻结两个 backbone，只训 fusion+head（小数据防过拟合）
+
+train:
+  epochs: 100
+  batch_size: 16
+  amp: true
+  ema: true
+  ema_decay: 0.999
+  grad_clip: 10.0
+  lr: 0.0005
+  backbone_lr: 0.0001
+  weight_decay: 0.0005
+  val_interval: 5
+  log_interval: 20
+
+scheduler:
+  type: warmup_cosine
+  warmup_epochs: 3
+
+cv:
+  split_dir: splits
+
+postprocess:
+  conf_thres: 0.001
+  iou_thres: 0.6
+  max_det: 100
+
+checkpoint:
+  save_dir: checkpoints/yolo_dual
+  save_freq: 5
+
+device: cuda
+seed: 42
+num_workers: 8

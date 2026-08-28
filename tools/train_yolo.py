@@ -44,8 +44,8 @@ def build_optimizer(model, config):
     for name, p in model.named_parameters():
         if not p.requires_grad:
             continue
-        # Detect 头在 model.model[-1]（yolo11 为 index 23）
-        if name.startswith("model.23"):
+        # Detect 头（单分支为 model.23.*，双分支为 head.*）与融合模块用完整 lr
+        if name.startswith(("model.23", "head", "fusion")):
             head_params.append(p)
         else:
             other_params.append(p)
@@ -159,7 +159,8 @@ def main():
 
     set_seed(config.get("seed", 42))
     mode = config["dataset"].get("mode", "rgb")
-    ch = 5 if mode == "fusion" else 3
+    arch = config["model"].get("arch", "yolo11")
+    ch = 5 if mode in ("fusion", "dual") else 3
     nc = config["dataset"]["num_classes"]
     image_size = (config["input"]["height"], config["input"]["width"])
 
@@ -167,6 +168,7 @@ def main():
     print(f"  YOLO Training System (v0.8.0, mode={mode})")
     print("=" * 70)
     print(f"  Config: {args.config}")
+    print(f"  Arch: {arch}")
     print(f"  Channels: {ch} | Classes: {nc} | Image: {image_size}")
     print(f"  Device: {device}")
 
@@ -216,6 +218,7 @@ def main():
         ch=ch,
         nc=nc,
         pretrained=config["model"].get("pretrained", "yolo11n.pt"),
+        arch=arch,
         verbose=False,
     ).to(device)
     apply_freeze(model, config["model"].get("freeze", []))
@@ -242,6 +245,7 @@ def main():
         print(f"  EMA enabled (decay={config['train'].get('ema_decay', 0.9999)})")
 
     cfg_dict = {
+        "arch": arch,
         "mode": mode,
         "ch": ch,
         "nc": nc,

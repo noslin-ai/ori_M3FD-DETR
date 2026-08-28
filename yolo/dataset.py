@@ -149,7 +149,9 @@ class YOLOFusionDataset(Dataset):
 
         # ---- 通道拼接: rgb(3) + ir(1) + depth(1) ----
         h, w = self.size
-        if self.mode == "fusion":
+        # fusion=早期拼接 5ch；dual=双分支（模型内部拆分 RGB/辅助分支），
+        # 两者数据侧都输出 5 通道 [RGB(3), IR(1), Depth(1)]
+        if self.mode in ("fusion", "dual"):
             img = np.concatenate(
                 [rgb.astype(np.float32) / 255.0,
                  ir.astype(np.float32)[..., None] / 255.0,

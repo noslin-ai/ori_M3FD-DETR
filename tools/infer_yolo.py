@@ -206,7 +206,8 @@ def main():
 
     # ---- 模型 ----
     print("\n[2] Loading model...")
-    model = build_yolo_model(ch=ch, nc=nc, pretrained=None).to(device)
+    arch = cfg.get("arch", "yolo11")
+    model = build_yolo_model(ch=ch, nc=nc, pretrained=None, arch=arch).to(device)
     if args.use_ema and state.get("ema") is not None:
         print("  Using EMA weights")
         model.load_state_dict(state["ema"])
