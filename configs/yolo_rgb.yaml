@@ -1,0 +1,48 @@
+# YOLO RGB-only 对照配置（v0.8.0 第 1 步：先验证环境/数据/评估链路）
+# 用法: python tools/train_yolo.py --config configs/yolo_rgb.yaml --fold 1
+
+dataset:
+  root: data/train
+  num_classes: 12
+  mode: rgb            # rgb=3 通道对照；fusion=5 通道早期融合
+
+input:
+  width: 640           # 需能被 32 整除（YOLO stride=32）
+  height: 384
+
+model:
+  pretrained: yolo11n.pt   # 官方 COCO 预训练权重，需放在项目根目录
+  freeze: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]   # 冻结 backbone，只训 neck+head（小数据防过拟合）
+
+train:
+  epochs: 60
+  batch_size: 16
+  amp: true
+  ema: true
+  ema_decay: 0.9999
+  grad_clip: 10.0
+  lr: 0.001
+  backbone_lr: 0.0001
+  weight_decay: 0.0005
+  val_interval: 5
+  log_interval: 20
+
+scheduler:
+  type: warmup_cosine
+  warmup_epochs: 3
+
+cv:
+  split_dir: splits
+
+postprocess:
+  conf_thres: 0.001    # 评估用低阈值保留完整排序（对齐旧 evaluator 结论）
+  iou_thres: 0.6
+  max_det: 100
+
+checkpoint:
+  save_dir: checkpoints/yolo_rgb
+  save_freq: 5
+
+device: cuda
+seed: 42
+num_workers: 8

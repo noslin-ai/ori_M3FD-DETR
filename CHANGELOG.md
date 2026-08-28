@@ -6,6 +6,55 @@
 
 ---
 
+## v0.8.0 (major) — 方向切换：无卡环境改用 YOLO 早期融合方案
+
+**日期:** 2026-08-28  
+**类型:** 方向决策 / 新增主路径  
+**背景:** 服务器进入无卡模式（无 GPU），原 M3F-DETR 方案无法继续训练；且 rush_v2~v9 验证集 `mAP@50-95` 最高约 0.005，继续排错性价比低。决定改用 YOLO11 早期融合（RGB + IR + Depth → 5 通道输入）作为主路径，M3F-DETR 旧链路保留冻结作为参考。
+
+**详细说明:** 见 `项目问题分析报告.md` 第二十三节（决策原因、实施步骤、文件清单、交接注意事项）。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `yolo/__init__.py` | 新增 | YOLO 方案包 |
+| `yolo/dataset.py` | 新增 | 三模态数据加载；`mode=rgb` 输出 3ch、`mode=fusion` 输出 5ch（RGB+IR灰度+Depth归一化）；YOLO 归一化标签；同步增强 |
+| `yolo/model.py` | 新增 | 以 `yolo11n.yaml` + `ch=5/3` + `nc=12` 构建模型；从 `yolo11n.pt` 迁移权重；首层卷积新增通道用 RGB 权重均值初始化 |
+| `yolo/evaluate.py` | 新增 | YOLO 推理解码 + COCO mAP@50-95 评估（复用 engine/evaluator.compute_map） |
+| `tools/train_yolo.py` | 新增 | YOLO 训练入口（沿用 train.py 风格：YAML 配置、分段日志、EMA、AMP、best/latest/final checkpoint） |
+| `tools/infer_yolo.py` | 新增 | 测试集推理 → NMS → 每图 ≤100 框 → 官方格式 txt → zip |
+| `configs/yolo_rgb.yaml` | 新增 | RGB-only 对照配置（先跑，验证链路） |
+| `configs/yolo_fusion.yaml` | 新增 | 5ch 早期融合配置（主路径） |
+| `requirements.txt` | 修改 | 增加 `ultralytics` |
+
+### 推荐运行（恢复 GPU 后）
+
+```bash
+# 1) RGB-only 对照（必须先跑通，确认环境/数据/评估链路）
+python -u tools/train_yolo.py --config configs/yolo_rgb.yaml --fold 1 \
+  2>&1 | tee yolo_rgb_train.log
+
+# 2) 5ch 早期融合（主路径）
+python -u tools/train_yolo.py --config configs/yolo_fusion.yaml --fold 1 \
+  2>&1 | tee yolo_fusion_train.log
+
+# 3) 提交文件生成
+python tools/infer_yolo.py --checkpoint checkpoints/yolo_fusion/best.pth \
+  --data-root data/test --output submission_yolo --zip submission_yolo.zip
+```
+
+### 验证顺序
+
+1. 小数据过拟合冒烟：loss 必须下降；
+2. `mode=rgb` 验证集 `mAP@50-95` 非 0；
+3. `mode=fusion` 与 RGB-only 对比，确认多模态增益；
+4. 提交 1000 个 txt + zip。
+
+**2026-08-28 无卡冒烟已通过**：迷你数据集（8 张、CPU、320×192）上训练 1 epoch 与推理提交全流程跑通，见《项目问题分析报告》23.6。
+
+---
+
 ## v0.7.7 (experiment) — rush_v9：900 query 多尺度 anchor 修复 v8 尺寸瓶颈
 
 **日期:** 2026-08-27  
