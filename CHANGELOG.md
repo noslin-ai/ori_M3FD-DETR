@@ -27,7 +27,7 @@
 
 ### 注意
 
-`submission_yolo_sar_aug_tta.zip`，正式应优先使用与训练一致的 `submission_yolo_sar_aug_tta_768.zip`。
+Note: submission_yolo_sar_aug_tta.zip was generated once with default imgsz=640. Prefer submission_yolo_sar_aug_tta_768.zip, which matches the 768 training size.
 
 ---
 
