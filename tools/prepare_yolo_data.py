@@ -37,7 +37,7 @@ def symlink_by_stem(src_dir, dst_dir, stems):
     for f in os.listdir(src_dir):
         stem = os.path.splitext(f)[0]
         if stem in stems:
-            src = os.path.join(src_dir, f)
+            src = os.path.abspath(os.path.join(src_dir, f))
             dst = os.path.join(dst_dir, f)
             if not os.path.exists(dst):
                 os.symlink(src, dst)
