@@ -227,22 +227,36 @@ class DualBranchYOLO(nn.Module):
 
 
 def apply_freeze(model, freeze_layers):
-    """按参数名前缀冻结（兼容单分支层索引与双分支模块前缀）。
+    """按参数名前缀冻结（兼容单分支层索引、双分支模块前缀、按模块按层）。
 
     Args:
         model: DetectionModel 或 DualBranchYOLO
-        freeze_layers: 冻结项列表，支持两种写法：
+        freeze_layers: 冻结项列表，支持三种写法：
             - int（单分支层索引），如 [0, ..., 9] 冻结 backbone；
-            - str（参数名前缀），如 ["backbone_rgb", "backbone_aux"]。
+            - str（参数名前缀），如 ["backbone_rgb", "backbone_aux"]；
+            - dict（按模块按层），如 {"backbone_rgb": [0..9], "backbone_aux": [0..9]}
+              （双分支下只冻结各分支 backbone，保留 neck 可训练）。
     """
+    # YAML 里 freeze 直接写 dict 时（{"模块": [层,...]}），包成单元素列表统一处理
+    if isinstance(freeze_layers, dict):
+        freeze_layers = [freeze_layers]
     freeze_layers = freeze_layers or []
     frozen = 0
     for name, p in model.named_parameters():
         frozen_flag = False
         for f in freeze_layers:
-            prefix = f"model.{f}." if isinstance(f, int) else f"{f}."
-            if name.startswith(prefix):
-                frozen_flag = True
+            if isinstance(f, dict):
+                # {"模块前缀": [层索引,...]}：按模块按层冻结
+                frozen_flag = any(
+                    name.startswith(f"{prefix}.{idx}.")
+                    for prefix, indices in f.items()
+                    for idx in indices
+                )
+            elif isinstance(f, int):
+                frozen_flag = name.startswith(f"model.{f}.")
+            else:
+                frozen_flag = name.startswith(f"{f}.")
+            if frozen_flag:
                 break
         p.requires_grad_(not frozen_flag)
         frozen += int(frozen_flag)

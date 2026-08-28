@@ -1,0 +1,53 @@
+# YOLO 双分支 v2 —— 只冻结各分支 backbone（0..9），neck 可训练
+# 背景: v1 冻结整条分支（含 neck），验证 mAP 约 0.22，容量受限；
+#       本配置对齐 RGB v1 的成功做法：neck+fusion+head 全量训练。
+# 用法: python tools/train_yolo.py --config configs/yolo_dual_v2.yaml --fold 1
+
+dataset:
+  root: data/train
+  num_classes: 12
+  mode: dual
+
+input:
+  width: 640
+  height: 384
+
+model:
+  arch: dual
+  pretrained: yolo11n.pt
+  freeze:
+    backbone_rgb: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    backbone_aux: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+train:
+  epochs: 100
+  batch_size: 16
+  amp: true
+  ema: true
+  ema_decay: 0.999
+  grad_clip: 10.0
+  lr: 0.0005
+  backbone_lr: 0.0001
+  weight_decay: 0.0005
+  val_interval: 5
+  log_interval: 20
+
+scheduler:
+  type: warmup_cosine
+  warmup_epochs: 3
+
+cv:
+  split_dir: splits
+
+postprocess:
+  conf_thres: 0.001
+  iou_thres: 0.6
+  max_det: 100
+
+checkpoint:
+  save_dir: checkpoints/yolo_dual_v2
+  save_freq: 5
+
+device: cuda
+seed: 42
+num_workers: 8

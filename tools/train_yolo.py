@@ -266,7 +266,11 @@ def main():
         if ema is not None and state.get("ema") is not None:
             ema.load_state_dict(state["ema"])
         if state.get("optimizer") is not None:
-            optimizer.load_state_dict(state["optimizer"])
+            try:
+                optimizer.load_state_dict(state["optimizer"])
+            except (ValueError, RuntimeError) as e:
+                # 冻结配置变化时优化器参数组可能不匹配，降级为新优化器
+                print(f"  ⚠ 优化器状态不匹配（{e}），使用新优化器")
         start_epoch = state.get("epoch", 0) + 1
         best_map = state.get("best_metric", 0.0)
 
