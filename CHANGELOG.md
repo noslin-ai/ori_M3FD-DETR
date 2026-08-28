@@ -55,6 +55,24 @@ python tools/infer_yolo.py --checkpoint checkpoints/yolo_fusion/best.pth \
 
 ---
 
+## v0.10.0 (experiment) — 原生 ultralytics 大模型 + 完整增强（RGB）
+
+**日期:** 2026-08-28  
+**类型:** 大模型升级实验  
+**背景:** RGB v2（yolo11n，640×384，弱增强）验证 mAP@50-95=0.3104（+TTA 0.3234），要冲击更高分需模型规模与增强双升级。
+
+### 本轮改动
+
+- `tools/prepare_yolo_data.py`（新增）：把三模态数据整理成 ultralytics 原生 YOLO 格式（fold1 划分，符号链接省磁盘）；
+- `tools/infer_ultra.py`（新增）：加载原生 best.pt，用 ultralytics 自带 letterbox 预处理生成提交文件，支持 `--tta`；
+- 训练：**yolo11x（batch 8）+ yolo11m（batch 16）并行**，imgsz=640，epochs=100，mosaic/mixup(0.15)/HSV/scale 全开，seed 42。
+
+### 状态
+
+训练进行中（runs/native_x、runs/native_m），完成后与 RGB v2（0.3104/0.3234）对比，取最优生成新提交包。
+
+---
+
 ## v0.9.0 (experiment) — 双分支 + P3-P5 注意力融合（方案 B）
 
 **日期:** 2026-08-28  
