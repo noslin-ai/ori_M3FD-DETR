@@ -69,7 +69,8 @@ python tools/infer_yolo.py --checkpoint checkpoints/yolo_fusion/best.pth \
 | **YOLO RGB v1** | yolo11n + 冻结 backbone，60 epoch，640×384 | **0.2971** | 0.5320 | 0.2643 | 首次出分 |
 | **YOLO RGB v1 + TTA** | 水平翻转双视角 + 类别内 NMS 融合 | **0.3231** | 0.5695 | 0.3237 | +0.026 |
 | YOLO fusion v1 | 5ch 早期融合（RGB+IR+Depth），80 epoch | 0.1782 | 0.3306 | 0.1609 | 未跑赢 RGB |
-| YOLO RGB v2 | 解冻 backbone 全量微调，100 epoch | 0.3104* | — | — | *第 50 轮 best，训练中 |
+| YOLO RGB v2 | 解冻 backbone 全量微调，100 epoch | 0.3104 | 0.5565 | best.pth（第 60 轮） |
+| **YOLO RGB v2 + TTA** | 解冻 backbone + 水平翻转 TTA | **0.3234** | 0.5698 | 正式提交模型 |
 
 RGB v1 每类 AP50-95（修复 per-class 统计后）：seat 0.52、uav 0.40、light 0.39、car 0.37、animal 0.33，无类别塌缩。
 置信度阈值扫描：`conf=0.001` 最优（0.2971），阈值越高 mAP 越低，提交保持 0.001。
@@ -115,7 +116,7 @@ RGB v1 每类 AP50-95（修复 per-class 统计后）：seat 0.52、uav 0.40、l
 
 ### 五、后续计划（按优先级）
 
-1. **提交**：RGB-v2 训练完成后评估，取最优模型（v2 vs v1）+ `--tta` 生成正式提交包。
+1. **提交（已完成）**：取 RGB-v2 best.pth + `--tta` 生成正式提交包 `submission_yolo_final.zip`（1000 个 txt，验证集口径 mAP@50-95=0.3234）。
 2. **增强**：实现 mosaic/mixup/scale jitter（对齐 ultralytics 原生增强），预期缓解平台期。
 3. **分辨率**：640×384 → 800×512 或 1280×768，验证小目标（uav）提升。
 4. **类别不平衡**：按 GT 频次重采样或损失加权。
