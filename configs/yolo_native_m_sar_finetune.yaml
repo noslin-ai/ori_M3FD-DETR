@@ -1,0 +1,45 @@
+# Low-LR fine-tune from current best SAR-style YOLO11m (v0.12.0)
+#
+# Rationale: v0.11.2 best is epoch104 with mAP50-95=0.46663. This run starts
+# from that best.pt, disables heavy mosaic/mixup/copy-paste, and uses a smaller
+# LR to polish localization and class confidence on the same enhanced data.
+#
+# Train:
+#   yolo detect train cfg=configs/yolo_native_m_sar_finetune.yaml \
+#     2>&1 | tee yolo_native_m_sar_finetune.log
+
+model: runs/detect/runs/native_m_sar/rgb_sar768-2/weights/best.pt
+data: data/yolo_sar_m/data.yaml
+epochs: 60
+imgsz: 768
+batch: 8
+device: 0
+workers: 8
+seed: 43
+project: runs/native_m_sar
+name: rgb_sar768_finetune
+exist_ok: false
+pretrained: true
+optimizer: AdamW
+lr0: 0.00008
+lrf: 0.02
+weight_decay: 0.0004
+warmup_epochs: 1.0
+cos_lr: true
+close_mosaic: 0
+mosaic: 0.0
+mixup: 0.0
+copy_paste: 0.0
+scale: 0.25
+translate: 0.05
+fliplr: 0.5
+flipud: 0.0
+hsv_h: 0.006
+hsv_s: 0.18
+hsv_v: 0.14
+multi_scale: false
+patience: 25
+save_period: 5
+val: true
+plots: true
+amp: true

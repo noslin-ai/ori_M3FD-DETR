@@ -4,6 +4,26 @@
 
 ---
 
+## v0.12.0 (experiment) — SAR-style 继续扩展：YOLO11x 与低学习率精修
+
+**日期:** 2026-08-28
+**类型:** 继续优化 / A-B 实验
+**背景:** v0.11.2 的 SAR-style YOLO11m 768 已达到 `mAP50-95=0.46663`，超过原生 YOLO11x RGB 640 的 `0.45035`。继续沿着有效路线扩展两组实验：更大模型容量与低学习率定位精修。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `configs/yolo_native_x_sar_aug.yaml` | 新增 | YOLO11x 在 SAR-style 增强 3ch 数据上训练，固定 768，batch=6，测试大模型容量是否继续带来收益 |
+| `configs/yolo_native_m_sar_finetune.yaml` | 新增 | 从 `rgb_sar768-2/weights/best.pt` 低学习率精修 60 epoch，关闭 mosaic/mixup/copy_paste，弱尺度扰动，尝试提升定位与置信度校准 |
+
+### 推荐观察指标
+
+- 若 YOLO11x SAR 在 60-80 epoch 超过 0.46663，优先等其完整收敛并用 768+TTA 生成提交。
+- 若 YOLO11m finetune 在 20-30 epoch 无提升，保留为消融，不强行继续作为主线。
+
+---
+
 ## v0.11.2 (result) — SAR-style YOLO11m 反超原生 YOLO11x
 
 **日期:** 2026-08-28

@@ -1,0 +1,45 @@
+# YOLO11x on SAR-style enhanced 3ch data (v0.12.0)
+#
+# Rationale: SAR-style enhanced YOLO11m 768 reached mAP50-95=0.46663, while
+# native RGB YOLO11x 640 reached 0.45035. This run tests whether the larger
+# YOLO11x capacity benefits from the same denoise/detail-enhanced signal.
+#
+# Train:
+#   yolo detect train cfg=configs/yolo_native_x_sar_aug.yaml \
+#     2>&1 | tee yolo_native_x_sar_aug_train.log
+
+model: yolo11x.pt
+data: data/yolo_sar_m/data.yaml
+epochs: 120
+imgsz: 768
+batch: 6
+device: 0
+workers: 8
+seed: 42
+project: runs/native_x_sar
+name: rgb_sar768
+exist_ok: false
+pretrained: true
+optimizer: AdamW
+lr0: 0.0004
+lrf: 0.01
+weight_decay: 0.0005
+warmup_epochs: 3.0
+cos_lr: true
+close_mosaic: 15
+mosaic: 1.0
+mixup: 0.12
+copy_paste: 0.08
+scale: 0.6
+translate: 0.1
+fliplr: 0.5
+flipud: 0.0
+hsv_h: 0.01
+hsv_s: 0.35
+hsv_v: 0.25
+multi_scale: false
+patience: 35
+save_period: 5
+val: true
+plots: true
+amp: true
