@@ -4,6 +4,44 @@
 
 ---
 
+## v0.11.0 (experiment) — SAR 论文启发的 YOLO11m 增强数据实验
+
+**日期:** 2026-08-28
+**类型:** 论文方法迁移 / YOLO baseline 优化
+**背景:** 当前最强 baseline 已切换为原生 Ultralytics YOLO，服务器正在并行训练 `yolo11m` 与 `yolo11x`。截至本次查看，`yolo11m` 明显优于 `yolo11x`，best 约为 `mAP50=0.7083 / mAP50-95=0.4248`，因此后续优化优先围绕 `yolo11m` 做低风险 A/B。
+
+### 论文启发与取舍
+
+- **DenoDet V2 / SAR 去噪思路:** 不直接改 Ultralytics 主干，先在离线数据侧加入轻量 bilateral/median 去噪，降低传感器噪声和局部伪纹理对小目标的干扰。
+- **SARLite / QGPG-Net 小目标细节增强:** 在保留 RGB 颜色结构的前提下，对 luminance 做 CLAHE、IR 弱注入、Depth 边缘弱注入和 unsharp mask，提高小目标边界与局部对比度。
+- **YOSDet 定位质量启发:** 用更高 `imgsz=768`、低置信度评估/提交和 `close_mosaic`，优先保召回与定位质量。
+- **避免重复无效路线:** 早期 5ch fusion 和 dual-branch attention 已经接近或弱于 RGB baseline，本轮不再扩大多模态结构复杂度，先保留 3ch ImageNet 预训练兼容性。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `tools/prepare_yolo_sar_enhanced_data.py` | 新增 | 生成 3ch SAR-style 增强 YOLO 数据集：RGB 保色彩 + L 通道去噪/CLAHE/锐化 + IR/Depth 弱 saliency 注入；标签用 symlink 保持一致 |
+| `configs/yolo_native_m_sar_aug.yaml` | 新增 | 原生 YOLO11m 增强数据实验配置：`imgsz=768`、AdamW、mosaic/mixup/copy_paste、multi_scale、close_mosaic |
+
+### 推荐运行顺序
+
+当前 `native_m` / `native_x` 两条训练仍在占用 GPU 和 dataloader CPU，先不要抢资源。待它们结束后运行：
+
+```bash
+python tools/prepare_yolo_sar_enhanced_data.py --fold 1 --out data/yolo_sar_m --overwrite
+yolo detect train cfg=configs/yolo_native_m_sar_aug.yaml 2>&1 | tee yolo_native_m_sar_aug_train.log
+```
+
+若显存不足，优先把 `batch: 8` 降到 `batch: 6`，不要先降 `imgsz`，因为本实验核心收益来自小目标分辨率。
+
+### 验证
+
+- [x] `python -m py_compile tools/prepare_yolo_sar_enhanced_data.py` 通过。
+- [x] 单张样本增强函数冒烟通过，输出 `(360, 640, 3) uint8`，值域 `[0,255]`。
+- [ ] 等当前原生训练完成后生成 `data/yolo_sar_m` 全量增强数据。
+- [ ] 跑 `yolo_native_m_sar_aug`，与 `native_m/rgb640-4` best 进行 fold1 A/B 对比。
+
 ---
 
 ## v0.8.0 (major) — 方向切换：无卡环境改用 YOLO 早期融合方案

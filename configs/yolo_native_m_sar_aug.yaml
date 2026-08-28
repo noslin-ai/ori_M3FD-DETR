@@ -1,0 +1,51 @@
+# YOLO native m SAR-style enhanced RGB experiment (v0.11.0)
+#
+# Paper-inspired ideas:
+# - DenoDet V2: denoise before feature learning; here implemented offline as a
+#   light bilateral/median front end to avoid changing Ultralytics internals.
+# - SARLite/QGPG-Net: emphasize small target details via CLAHE + unsharp edges.
+# - YOSDet/localization-quality lesson: train at higher resolution with low conf
+#   evaluation/inference, preserving small boxes and recall.
+#
+# Prepare data first:
+#   python tools/prepare_yolo_sar_enhanced_data.py --fold 1 --out data/yolo_sar_m --overwrite
+#
+# Train after current native_m/native_x runs finish:
+#   yolo detect train cfg=configs/yolo_native_m_sar_aug.yaml \
+#     2>&1 | tee yolo_native_m_sar_aug_train.log
+
+model: yolo11m.pt
+data: data/yolo_sar_m/data.yaml
+epochs: 120
+imgsz: 768
+batch: 8
+device: 0
+workers: 8
+seed: 42
+project: runs/native_m_sar
+name: rgb_sar768
+exist_ok: false
+pretrained: true
+optimizer: AdamW
+lr0: 0.0005
+lrf: 0.01
+weight_decay: 0.0005
+warmup_epochs: 3.0
+cos_lr: true
+close_mosaic: 15
+mosaic: 1.0
+mixup: 0.12
+copy_paste: 0.08
+scale: 0.6
+translate: 0.1
+fliplr: 0.5
+flipud: 0.0
+hsv_h: 0.01
+hsv_s: 0.35
+hsv_v: 0.25
+multi_scale: true
+patience: 35
+save_period: 5
+val: true
+plots: true
+amp: true
