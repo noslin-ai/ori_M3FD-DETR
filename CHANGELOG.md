@@ -96,9 +96,11 @@ IR+Depth(2ch) ─▶ backbone_aux（yolo11n 预训练）──▶ P3/P4/P5 ┘
 - 推理：eval 输出 `(B, 16, N)` 正常；
 - 小验证集：链路可跑通（随机头 mAP≈0，符合预期）。
 
-### 状态
+### 状态与结论
 
-训练中（100 epoch，冻结 backbone_rgb/backbone_aux，只训 fusion+head），结果待验证后更新。
+- Dual v1（冻结整条分支）约 40 epoch 平台化在 0.22，停止；
+- Dual v2（neck 可训练，从 v1 best 续训）best 达 **0.3105**（mAP@50 0.5407），与 RGB v2（0.3086）持平，无显著提升；TTA 反而降至 0.2927（RGB v2+TTA 为 0.3234）。
+- **结论：双分支+注意力融合不构成显著增益，正式提交维持 RGB v2 + TTA（0.3234）；dual 保留为消融记录。** 后续主攻 RGB 增强路线（mosaic/mixup、分辨率、类别重采样），详见《项目问题分析报告》25.6/25.7。
 
 ---
 
