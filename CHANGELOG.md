@@ -4,6 +4,28 @@
 
 ---
 
+## v0.11.1 (patch) — 固定 SAR-style YOLO11m 训练尺度避免 OOM
+
+**日期:** 2026-08-28
+**类型:** 训练稳定性修复
+**背景:** `yolo_native_m_sar_aug` 首次启动时 `imgsz=768 + multi_scale=true` 会采样到 1400+ 的大尺度；在 `yolo11x` baseline 同时占用约 9.4GB 显存时，新实验出现 CUDA OOM warning。为保留小目标分辨率收益并降低显存波动，改为固定 768 训练。
+
+### 修改
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `configs/yolo_native_m_sar_aug.yaml` | 修复 | `multi_scale: true` 改为 `false`，并在配置注释中记录原因 |
+
+### 运行策略
+
+`data/yolo_sar_m` 已完成生成（1600 train / 400 val），后续直接重启训练，不再重复数据准备：
+
+```bash
+yolo detect train cfg=configs/yolo_native_m_sar_aug.yaml 2>&1 | tee yolo_native_m_sar_aug_train_fixed.log
+```
+
+---
+
 ## v0.11.0 (experiment) — SAR 论文启发的 YOLO11m 增强数据实验
 
 **日期:** 2026-08-28

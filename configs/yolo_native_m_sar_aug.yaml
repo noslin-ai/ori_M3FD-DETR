@@ -13,6 +13,9 @@
 # Train after current native_m/native_x runs finish:
 #   yolo detect train cfg=configs/yolo_native_m_sar_aug.yaml \
 #     2>&1 | tee yolo_native_m_sar_aug_train.log
+#
+# Note: keep multi_scale=false at imgsz=768. Enabling multi_scale can sample
+# very large shapes and caused CUDA OOM when another YOLO run was active.
 
 model: yolo11m.pt
 data: data/yolo_sar_m/data.yaml
@@ -43,7 +46,7 @@ flipud: 0.0
 hsv_h: 0.01
 hsv_s: 0.35
 hsv_v: 0.25
-multi_scale: true
+multi_scale: false
 patience: 35
 save_period: 5
 val: true
