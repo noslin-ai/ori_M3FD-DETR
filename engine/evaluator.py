@@ -6,8 +6,10 @@
     3. 预测结果 → COCO JSON 转换
 """
 
+import io
 import json
 import os
+import contextlib
 import torch
 from torch.cuda.amp import autocast
 
@@ -250,6 +252,10 @@ def compute_map(predictions, targets, num_classes=12):
         try:
             coco_eval_cls.evaluate()
             coco_eval_cls.accumulate()
+            # pycocotools 的 stats 需要先调用 summarize() 才会填充（会打印 12 行）；
+            # 这里静默计算，避免每个类别额外输出 12 行日志
+            with contextlib.redirect_stdout(io.StringIO()):
+                coco_eval_cls.summarize()
             stats_cls = coco_eval_cls.stats
         except Exception:
             stats_cls = []

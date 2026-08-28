@@ -19,7 +19,7 @@ train:
   batch_size: 16
   amp: true
   ema: true
-  ema_decay: 0.9999
+  ema_decay: 0.999       # 小步数训练（每 epoch ~100 步）下不宜用 0.9999，否则 EMA 严重滞后
   grad_clip: 10.0
   lr: 0.001
   backbone_lr: 0.0001

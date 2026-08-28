@@ -55,6 +55,75 @@ python tools/infer_yolo.py --checkpoint checkpoints/yolo_fusion/best.pth \
 
 ---
 
+## v0.8.1 (breakthrough) — YOLO 方案首次出分：RGB 基线验证集 mAP@50-95 ≈ 0.30
+
+**日期:** 2026-08-28  
+**类型:** 实验突破 / 关键修复 / 提交准备  
+**一句话总结:** 从 M3F-DETR 一个月卡在 `mAP@50-95≈0.005`，切换到 YOLO11 后 RGB 基线直接到 **0.297**，加水平翻转 TTA 到 **0.323**，验证了方向切换的正确性。
+
+### 一、结果总览（fold 1 验证集，400 张，RTX 5090）
+
+| 实验 | 配置 | mAP@50-95 | mAP@50 | mAP@75 | 说明 |
+|------|------|-----------|--------|--------|------|
+| M3F-DETR rush_v2~v9（历史） | 自研 DETR，一个月 | ≈0.005 | ≈0.02 | ≈0 | 已废弃主路径 |
+| **YOLO RGB v1** | yolo11n + 冻结 backbone，60 epoch，640×384 | **0.2971** | 0.5320 | 0.2643 | 首次出分 |
+| **YOLO RGB v1 + TTA** | 水平翻转双视角 + 类别内 NMS 融合 | **0.3231** | 0.5695 | 0.3237 | +0.026 |
+| YOLO fusion v1 | 5ch 早期融合（RGB+IR+Depth），80 epoch | 0.1782 | 0.3306 | 0.1609 | 未跑赢 RGB |
+| YOLO RGB v2 | 解冻 backbone 全量微调，100 epoch | 0.3104* | — | — | *第 50 轮 best，训练中 |
+
+RGB v1 每类 AP50-95（修复 per-class 统计后）：seat 0.52、uav 0.40、light 0.39、car 0.37、animal 0.33，无类别塌缩。
+置信度阈值扫描：`conf=0.001` 最优（0.2971），阈值越高 mAP 越低，提交保持 0.001。
+
+### 二、关键修复（本轮踩坑闭环）
+
+1. **EMA 滞后导致 best.pth 选错（高）**
+   - 现象：训练内验证 mAP 停在 0.0004~0.02，但原始模型实际已达 0.27。
+   - 根因：`ema_decay=0.9999` 配合每 epoch 仅 ~100 步时 EMA 权重严重滞后（有效视窗约 10000 步），验证用的 EMA 模型几乎还是初始权重。
+   - 修复：`tools/train_yolo.py` 验证时**用原始模型选 best**（EMA 仅作参考输出）；配置 `ema_decay` 降为 `0.999`。
+   - 影响：fusion/RGB-v2 的 best.pth 均为真实最优；RGB v1 的 best.pth 因旧代码失效，最终取 final.pth 原始权重。
+
+2. **compute_map 每类 AP 恒为 0（中）**
+   - 根因：pycocotools 的 `COCOeval.stats` 需要先调用 `summarize()` 才会填充；旧代码 per-class 只 evaluate/accumulate 就读 stats，得到空列表被 except 吞掉。
+   - 修复：`engine/evaluator.py` 在 per-class 循环中静默调用 `summarize()`（`contextlib.redirect_stdout` 抑制打印）。
+   - 影响：每类 AP 恢复正常，可继续用于类别不平衡诊断。
+
+3. **深度图实际为 8bit JPG 可视化（中）**
+   - 赛题文档描述 16bit PNG（毫米值），但下载数据实际是 8bit JPG 可视化深度（0~255）。按 16bit 处理会把整图裁成 0。
+   - 修复：`yolo/dataset.py::_load_depth` 兼容两种格式（max>255 按 16bit，否则按 1~255 映射），与旧 `datasets/depth_process.py` 逻辑一致。
+
+4. **图像尺寸语义 bug（低）**
+   - `(H, W)` 在 `_resize` 中被解包成 `(w, h)`，导致输出图像被旋转式缩放（640×384 的高瘦图）。
+   - 修复：`h, w = self.size`，cv2.resize 传 `(w, h)`。
+
+### 三、新增/修改文件
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `configs/yolo_rgb_v2.yaml` | 新增 | 解冻 backbone 全量微调配置（100 epoch，lr 0.0005） |
+| `tools/infer_yolo.py` | 增强 | 新增 `--tta`：水平翻转双视角推理 + 类别内 NMS 融合 |
+| `tools/train_yolo.py` | 修复 | best 选择改用原始模型；EMA 仅参考 |
+| `configs/yolo_rgb.yaml` / `yolo_fusion.yaml` | 调参 | `ema_decay: 0.9999 → 0.999` |
+| `engine/evaluator.py` | 修复 | per-class AP 静默 summarize |
+| `yolo/dataset.py` | 修复 | 深度图 8bit/16bit 兼容、尺寸语义 |
+
+### 四、当前问题
+
+1. **5ch 早期融合未跑赢 RGB**（fusion 0.178 vs RGB 0.297）：可能原因——1600 张训练数据太少，融合通道均值初始化带来的特征偏移需要更多数据/训练；增强过弱；或早期融合本身在这份数据上信息冗余（RGB 已含大部分可判别信息）。
+2. **RGB 进入 ~0.30 平台期**：当前增强仅 resize + 随机翻转 + RGB 光度扰动，缺少 mosaic/mixup/尺度抖动；解冻 backbone（v2）提升有限。
+3. **EMA 仍略低于原始模型**（0.999 衰减在 100 步/epoch 下视窗 ~1000 步），可考虑 0.99 或仅作推理参考。
+4. **小目标/难类**：boat/ball/garbage can/tricycle 等低频类别 AP 偏低，需要 per-class 分析与类别重采样。
+
+### 五、后续计划（按优先级）
+
+1. **提交**：RGB-v2 训练完成后评估，取最优模型（v2 vs v1）+ `--tta` 生成正式提交包。
+2. **增强**：实现 mosaic/mixup/scale jitter（对齐 ultralytics 原生增强），预期缓解平台期。
+3. **分辨率**：640×384 → 800×512 或 1280×768，验证小目标（uav）提升。
+4. **类别不平衡**：按 GT 频次重采样或损失加权。
+5. **融合改进**：双分支 + P3-P5 交叉注意力融合（原方案 B），替代早期融合。
+6. **后处理**：TTA 已合入；conf/NMS 网格扫描脚本可复用。
+
+---
+
 ## v0.7.7 (experiment) — rush_v9：900 query 多尺度 anchor 修复 v8 尺寸瓶颈
 
 **日期:** 2026-08-27  

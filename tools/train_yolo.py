@@ -293,17 +293,28 @@ def main():
             f"LR: {lr:.6f}"
         )
 
-        # 验证
+        # 验证（best 选择用原始模型；EMA 仅作参考输出。
+        # 注意: ema_decay 若过大（如 0.9999）而每 epoch 步数少，
+        # EMA 权重会严重滞后，用 EMA 选 best 会把最好的 checkpoint 错过）
         if val_loader and (epoch + 1) % val_interval == 0:
             print("\n  --- Validation ---")
-            eval_model = ema.model if ema else model
             results = evaluate(
-                eval_model, val_loader, device, num_classes=nc,
+                model, val_loader, device, num_classes=nc,
                 conf_thres=cfg_dict["conf_thres"],
                 iou_thres=cfg_dict["iou_thres"],
                 max_det=cfg_dict["max_det"],
                 use_amp=use_amp,
             )
+            if ema is not None:
+                print("  --- Validation (EMA) ---")
+                results_ema = evaluate(
+                    ema.model, val_loader, device, num_classes=nc,
+                    conf_thres=cfg_dict["conf_thres"],
+                    iou_thres=cfg_dict["iou_thres"],
+                    max_det=cfg_dict["max_det"],
+                    use_amp=use_amp,
+                )
+
             map_5095 = results.get("mAP50-95", 0.0)
             if map_5095 > best_map:
                 best_map = map_5095

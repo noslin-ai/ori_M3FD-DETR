@@ -1,0 +1,50 @@
+# YOLO RGB-only v2 —— 解冻 backbone 全量微调（v0.8.1）
+# 背景: v1（冻结 backbone, 60 epoch）验证 mAP@50-95=0.297；
+#       本配置解冻全部参数继续微调，期望小目标/难类再提升。
+# 用法: python tools/train_yolo.py --config configs/yolo_rgb_v2.yaml --fold 1
+
+dataset:
+  root: data/train
+  num_classes: 12
+  mode: rgb
+
+input:
+  width: 640
+  height: 384
+
+model:
+  pretrained: yolo11n.pt
+  freeze: []                 # 解冻全部参数（含 backbone）全量微调
+
+train:
+  epochs: 100
+  batch_size: 16
+  amp: true
+  ema: true
+  ema_decay: 0.999           # 小步数训练下避免 EMA 滞后（见 v0.8.1 修复记录）
+  grad_clip: 10.0
+  lr: 0.0005                 # 全量微调适当降低学习率，防止过拟合
+  backbone_lr: 0.0001
+  weight_decay: 0.0005
+  val_interval: 5
+  log_interval: 20
+
+scheduler:
+  type: warmup_cosine
+  warmup_epochs: 3
+
+cv:
+  split_dir: splits
+
+postprocess:
+  conf_thres: 0.001
+  iou_thres: 0.6
+  max_det: 100
+
+checkpoint:
+  save_dir: checkpoints/yolo_rgb_v2
+  save_freq: 5
+
+device: cuda
+seed: 42
+num_workers: 8
