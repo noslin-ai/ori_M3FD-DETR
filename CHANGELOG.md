@@ -4,6 +4,33 @@
 
 ---
 
+## v0.11.2 (result) — SAR-style YOLO11m 反超原生 YOLO11x
+
+**日期:** 2026-08-28
+**类型:** 实验结果 / 提交产物
+**结论:** 论文启发的 SAR-style 增强数据 + YOLO11m 固定 768 训练取得当前最佳 fold1 验证结果。
+
+### 结果对比
+
+| 实验 | best epoch | mAP50 | mAP50-95 | 备注 |
+|------|------------|-------|----------|------|
+| native YOLO11m RGB 640 | 79 | 0.71913 | 0.44472 | 原生 RGB baseline |
+| native YOLO11x RGB 640 | 93 | 0.72719 | 0.45035 | 大模型 baseline，训练完成后反超 YOLO11m |
+| **SAR-style YOLO11m 768** | **104** | **0.75012** | **0.46663** | 当前最优，较 YOLO11x +0.01628 |
+
+### 训练与产物
+
+- 训练目录：`runs/detect/runs/native_m_sar/rgb_sar768-2/`
+- 最优权重：`runs/detect/runs/native_m_sar/rgb_sar768-2/weights/best.pt`
+- 推理命令：`python tools/infer_ultra.py --weights runs/detect/runs/native_m_sar/rgb_sar768-2/weights/best.pt --data-root data/test --output submission_yolo_sar_aug_tta_768 --tta --imgsz 768 --zip submission_yolo_sar_aug_tta_768.zip --batch 8 --device cuda`
+- 提交包：`submission_yolo_sar_aug_tta_768.zip`（1000 个 txt，约 646K）
+
+### 注意
+
+`submission_yolo_sar_aug_tta.zip`，正式应优先使用与训练一致的 `submission_yolo_sar_aug_tta_768.zip`。
+
+---
+
 ## v0.11.1 (patch) — 固定 SAR-style YOLO11m 训练尺度避免 OOM
 
 **日期:** 2026-08-28
