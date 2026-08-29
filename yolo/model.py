@@ -23,7 +23,7 @@ import torch.nn as nn
 from ultralytics.cfg import get_cfg
 from ultralytics.nn.tasks import DetectionModel
 
-from .fusion import CrossModalFusion
+from .fusion import CrossModalFusion, ZeroConv2d
 
 
 def _load_pretrained_sd(pretrained_path):
@@ -92,6 +92,9 @@ def build_yolo_model(ch=3, nc=12, pretrained="yolo11n.pt", arch="yolo11", verbos
         arch: "yolo11" 单分支 或 "dual" 双分支+注意力融合
         verbose: 是否打印模型结构
     """
+    if arch == "dual_mcf":
+        return build_mcf_yolo_model(nc=nc, pretrained=pretrained, verbose=verbose)
+
     if arch == "dual":
         return build_dual_yolo_model(nc=nc, pretrained=pretrained, verbose=verbose)
 
@@ -270,3 +273,105 @@ def count_parameters(model):
     total = sum(p.numel() for p in model.parameters())
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     return total, trainable
+
+
+class MCFDualYOLO(nn.Module):
+    """MCF 双分支（YOLOv11-RGBT midfusion-MCF 结构）。
+
+    与 DualBranchYOLO 的区别:
+        - 融合单元: P3/P4/P5 每层一个 ZeroConv2d，fused = rgb_feat + ZeroConv(aux_feat)。
+          初始 ZeroConv 权重为 0，融合特征 = RGB 主分支特征（可控微调）；
+        - 主分支（RGB）建议冻结预训练权重，只训练辅助分支 + ZeroConv + head。
+    接口与 DualBranchYOLO 一致（train/eval 兼容现有训练循环与评估链路）。
+    """
+
+    def __init__(self, backbone_rgb, backbone_aux, head, fuse_levels=(16, 19, 22)):
+        super().__init__()
+        self.backbone_rgb = backbone_rgb
+        self.backbone_aux = backbone_aux
+        self.head = head
+        self.fuse_levels = fuse_levels
+        # P3/P4/P5 通道数（yolo11: 64/128/256），ZeroConv 将 aux 映射到同通道后 ADD
+        self.fusion = nn.ModuleList([
+            ZeroConv2d(c, c, kernel_size=1) for c in (64, 128, 256)
+        ])
+        self.model = [head]
+        self.args = get_cfg(overrides={})
+        self.stride = head.stride
+        self.names = getattr(head, "names", {i: str(i) for i in range(head.nc)})
+        self.loss_fn = None
+
+    def _extract(self, backbone, x):
+        y = []
+        feats = []
+        for m in backbone:
+            if m.f != -1:
+                if isinstance(m.f, int):
+                    x = y[m.f]
+                else:
+                    x = [x if j == -1 else y[j] for j in m.f]
+            x = m(x)
+            y.append(x)
+            if m.i in self.fuse_levels:
+                feats.append(x)
+        return feats
+
+    def _forward_fused(self, img):
+        rgb = img[:, :3]
+        aux = img[:, 3:]
+        feats_rgb = self._extract(self.backbone_rgb, rgb)
+        feats_aux = self._extract(self.backbone_aux, aux)
+        return [
+            f_rgb + zc(f_aux)
+            for zc, f_rgb, f_aux in zip(self.fusion, feats_rgb, feats_aux)
+        ]
+
+    def forward(self, x):
+        if isinstance(x, dict):
+            fused = self._forward_fused(x["img"])
+            preds = self.head(fused)
+            if self.loss_fn is None:
+                from ultralytics.utils.loss import v8DetectionLoss
+                self.loss_fn = v8DetectionLoss(self)
+            return self.loss_fn(preds, x)
+        return self.head(self._forward_fused(x))
+
+
+def build_mcf_yolo_model(nc=12, pretrained="yolo11n.pt", verbose=False):
+    """构建 MCF 双分支（RGB 主分支 + IR/Depth 辅助分支 + ZeroConv ADD 融合）。
+
+    权重迁移:
+        - RGB 分支: 3ch 预训练权重直接复制；
+        - Aux 分支: 2ch，stem 用 RGB 权重均值初始化（v0.9.0 同款策略）；
+        - ZeroConv2d: 零初始化（MCF 核心）。
+    """
+    model_rgb = DetectionModel("yolo11n.yaml", ch=3, nc=nc, verbose=verbose)
+    model_aux = DetectionModel("yolo11n.yaml", ch=2, nc=nc, verbose=verbose)
+    model_rgb.args = get_cfg(overrides={})
+    model_aux.args = get_cfg(overrides={})
+
+    if pretrained and os.path.exists(pretrained):
+        sd = _load_pretrained_sd(pretrained)
+        for tag, model in (("RGB", model_rgb), ("Aux", model_aux)):
+            model_sd = model.state_dict()
+            transferred, skipped = 0, 0
+            for k, v in model_sd.items():
+                if k in sd and sd[k].shape == v.shape:
+                    model_sd[k] = sd[k]
+                    transferred += 1
+                else:
+                    skipped += 1
+            _init_stem_from_pretrained(model_sd, sd)
+            model.load_state_dict(model_sd)
+            print(f"  [{tag} branch] transferred: {transferred} keys, skipped: {skipped} keys")
+    else:
+        print(f"  Warning: pretrained {pretrained} not found, random init")
+
+    backbone_rgb = nn.Sequential(*list(model_rgb.model)[:-1])
+    backbone_aux = nn.Sequential(*list(model_aux.model)[:-1])
+    head = model_rgb.model[-1]
+
+    model = MCFDualYOLO(backbone_rgb, backbone_aux, head)
+    model.args = model_rgb.args
+    return model
+

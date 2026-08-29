@@ -66,3 +66,41 @@ class CrossModalFusion(nn.Module):
         sa = self.spatial_att(cat)                                # (B, 1, H, W)
         gated = rgb * ca * sa
         return gated + self.residual(cat)
+
+
+
+class ZeroConv2d(nn.Module):
+    """零初始化卷积（MCF 核心：初始输出为 0，融合 = 主分支特征）。"""
+
+    def __init__(self, in_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=False):
+        super().__init__()
+        self.conv = nn.Conv2d(
+            in_channels, out_channels, kernel_size,
+            stride=stride, padding=padding, bias=bias,
+        )
+        nn.init.zeros_(self.conv.weight)
+        if self.conv.bias is not None:
+            nn.init.zeros_(self.conv.bias)
+
+    def forward(self, x):
+        return self.conv(x)
+
+
+
+
+class ZeroConv2d(nn.Module):
+    """零初始化卷积（MCF 核心：初始输出为 0，融合 = 主分支特征）。"""
+
+    def __init__(self, in_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=False):
+        super().__init__()
+        self.conv = nn.Conv2d(
+            in_channels, out_channels, kernel_size,
+            stride=stride, padding=padding, bias=bias,
+        )
+        nn.init.zeros_(self.conv.weight)
+        if self.conv.bias is not None:
+            nn.init.zeros_(self.conv.bias)
+
+    def forward(self, x):
+        return self.conv(x)
+

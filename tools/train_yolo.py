@@ -32,6 +32,7 @@ from torch.utils.data import DataLoader, Subset
 from yolo.dataset import YOLOFusionDataset, collate_fn, get_fold_indices
 from yolo.model import build_yolo_model, apply_freeze, count_parameters
 from yolo.evaluate import evaluate
+from yolo.ogm_ge import modulate_gradients_ogm_ge
 from engine.ema import EMA
 from utils.scheduler import build_scheduler
 from utils.seed import set_seed
@@ -66,7 +67,8 @@ def build_optimizer(model, config):
 
 
 def train_one_epoch(model, loader, optimizer, device, scaler, ema=None,
-                    max_norm=10.0, use_amp=True, log_interval=20):
+                    max_norm=10.0, use_amp=True, log_interval=20,
+                    ogm_ge=None):
     """训练一个 epoch，返回平均损失与分项损失。"""
     model.train()
     total_loss = 0.0
@@ -93,7 +95,23 @@ def train_one_epoch(model, loader, optimizer, device, scaler, ema=None,
         loss_sum = loss.sum()
         scaler.scale(loss_sum).backward()
 
-        if max_norm > 0:
+        # OGM-GE 梯度调制（模态平衡，CVPR 2022 适配版）
+        ogm_active = ogm_ge is not None and ogm_ge.get("enabled", False)
+        if ogm_active:
+            # 先 unscale 还原真实梯度尺度，再调制；随后 max_norm 分支不再重复 unscale
+            scaler.unscale_(optimizer)
+            _ratio, _crgb, _caux = modulate_gradients_ogm_ge(
+                model,
+                alpha=float(ogm_ge.get("alpha", 1.0)),
+                use_ge=bool(ogm_ge.get("use_ge", True)),
+            )
+            if (i + 1) % log_interval == 0:
+                print(
+                    f"    [OGM-GE] ratio={_ratio:.3f} "
+                    f"coeff_rgb={_crgb:.3f} coeff_aux={_caux:.3f}"
+                )
+
+        if max_norm > 0 and not ogm_active:
             scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
 
@@ -292,6 +310,7 @@ def main():
             max_norm=config["train"].get("grad_clip", 10.0),
             use_amp=use_amp,
             log_interval=log_interval,
+            ogm_ge=config["train"].get("ogm_ge"),
         )
         scheduler.step()
         lr = optimizer.param_groups[-1]["lr"]
