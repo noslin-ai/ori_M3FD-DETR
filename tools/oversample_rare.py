@@ -80,7 +80,7 @@ def main():
     yaml_content = (
         f"path: {os.path.abspath(dst)}\n"
         "train: train/images\nval: val/images\n"
-        f"nc: {len(NAMES)}\nnames:/n{names_yaml}/n"
+        f"nc: {len(NAMES)}\nnames:\n{names_yaml}\n"
     )
     with open(os.path.join(dst, "data.yaml"), "w") as fh:
         fh.write(yaml_content)

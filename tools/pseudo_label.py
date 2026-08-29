@@ -45,7 +45,7 @@ def main():
             for (x1, y1, x2, y2), c, s in zip(xy, cl, cf):
                 cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
                 w, h = x2 - x1, y2 - y1
-                lines.append(f"{c} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f} {s:.6f}\n")
+                lines.append(f"{c} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}\n")
             total_boxes += len(lines)
         with open(os.path.join(lbl_dir, out_stem + ".txt"), "w") as f:
             f.writelines(lines)
