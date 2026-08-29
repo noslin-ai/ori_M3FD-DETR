@@ -25,13 +25,11 @@ screen -dmS yolo_x_sar768_v015 bash -lc 'source /root/miniconda3/etc/profile.d/c
 
 ### 状态
 
-- [x] 训练已启动：screen yolo_x_sar768_v015，日志 yolo_native_x_sar_aug_train_v015.log，run 目录 
-uns/detect/runs/native_x_sar/rgb_sar768/。
+- [x] 训练已启动：screen yolo_x_sar768_v015，日志 yolo_native_x_sar_aug_train_v015.log，run 目录 runs/detect/runs/native_x_sar/rgb_sar768/。
 - [x] 训练已完成：120/120，screen 自动退出，GPU 释放。
 - [x] 最佳点：epoch 100，mAP50=0.76565，mAP50-95=0.46932；略高于旧 YOLO11m SAR 768 clean 基线 0.46663（+0.00269）。
-- [x] 后段观察：close_mosaic 后 106-120 epoch 回落到 0.45341 左右，说明应使用 est.pt 而不是 last.pt。
-- [ ] 下一步：用 
-uns/detect/runs/native_x_sar/rgb_sar768/weights/best.pt 生成干净推理提交，并与历史平台最高候选做 A/B，不直接覆盖。
+- [x] 后段观察：close_mosaic 后 106-120 epoch 回落到 0.45341 左右，说明应使用 best.pt 而不是 last.pt。
+- [ ] 下一步：用 runs/detect/runs/native_x_sar/rgb_sar768/weights/best.pt 生成干净推理提交，并与历史平台最高候选做 A/B，不直接覆盖。
 
 ---
 
