@@ -41,7 +41,7 @@
 
 - [x] `/root/miniconda3/bin/python -m py_compile tools/infer_ultra_tiled.py` 通过。
 - [x] `/root/miniconda3/bin/python tools/infer_ultra_tiled.py --help` 通过。
-- [ ] 空闲时先用 `--limit 5` 冒烟生成 txt，确认数量和格式。
+- [x] `--limit 5` 冒烟生成 5 个 txt、261 个框，输出为官方归一化格式。
 - [ ] 全量生成 zip 后与 `submission_yolo_sar_aug_tta_768.zip`、`submission_yolo_stage2_1024_tta.zip` 做平台 A/B。
 
 ---
