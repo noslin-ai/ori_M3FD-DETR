@@ -4,6 +4,21 @@
 
 ---
 
+## v0.13.0 (experiment) — 少数类过采样 + 伪标签 + 1024 高分辨率重训
+
+**日期:** 2026-08-29
+**类型:** 数据增强 / 精度提升
+**背景:** per_class 报告定位三类问题——小目标漏检(sign/bicycle/ball/boat Recall 低)、少数类样本不足(ball19/boat28/tricycle2/uav30)、person 大类别密集小目标。据此并行推进三项改进。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `tools/oversample_rare.py` | 新增 | 图级过采样 boat2x/ball3x/uav2x/tricycle10x/garbage1x，训练集 1600→2067 张 |
+| `tools/pseudo_label.py` | 新增 | 测试集 SAR 增强 + best 模型推理生成伪标签(conf≥0.3)，新增 1000 张(986 张有框,4825 框) |
+| `data/yolo_sar_v3/` | 新增 | 合并训练集 3067 张(原始+过采样+伪标签)，val 400 张 |
+| 训练 | 新增 | imgsz 768→1024、best.pt 微调、epochs=120、batch=6、close_mosaic=15 |
+
 ## v0.12.0 (experiment) — SAR-style 继续扩展：YOLO11x 与低学习率精修
 
 **日期:** 2026-08-28
