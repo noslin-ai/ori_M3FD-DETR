@@ -4,6 +4,48 @@
 
 ---
 
+## v0.15.0 (experiment) — 小目标 Tile 推理融合：避免伪标签污染的提交侧优化
+
+**日期:** 2026-08-29
+**类型:** 推理增强 / 论文方法迁移 / 低风险提交侧优化
+**背景:** 队长 v0.13.0-v0.14.0 记录显示，伪标签和测试集写入训练集虽然可能抬高本地验证，但平台分反而下降；本轮严格避开测试集训练、伪标签和数据污染，优先采用 SAR 小目标检测论文常见的 multi-scale / crop-based inference 思路，在提交生成阶段提升小目标召回。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `tools/infer_ultra_tiled.py` | 新增 | 基于 Ultralytics YOLO 权重执行全图 + 重叠切片推理，将 tile 坐标映射回原图后做类别内 NMS 融合，并按官方格式生成 txt/zip；默认不修改旧 `infer_ultra.py` 流程 |
+
+### 关键原则
+
+- **inference-only**：脚本只读取 `data/test/visible` 图像并生成提交文件，不读取标签、不写训练集、不生成伪标签。
+- **clean-data**：训练仍只允许使用原始训练集与合规的训练集内过采样，禁止把测试集加入 train。
+- **可回退**：旧提交脚本和已有最佳提交包不变，新脚本单独输出到新目录/zip。
+- **小目标取向**：默认 `tile=512, overlap=0.25, imgsz=768`，用局部放大视角补充全图推理，最后每图限制 `max_det=100`。
+
+### 推荐运行
+
+先用当前可信最高平台基线权重试 768 tile TTA：
+
+```bash
+/root/miniconda3/bin/python tools/infer_ultra_tiled.py   --weights runs/detect/runs/native_m_sar/rgb_sar768-2/weights/best.pt   --data-root data/test   --output submission_yolo_sar_tile768_tta   --zip submission_yolo_sar_tile768_tta.zip   --imgsz 768 --tile 512 --overlap 0.25   --conf 0.001 --iou 0.6 --fuse-iou 0.55   --max-det 100 --batch 8 --device cuda --tta
+```
+
+如需对照队长 1024 干净两阶段模型，仅作为 A/B，不覆盖历史最佳提交：
+
+```bash
+/root/miniconda3/bin/python tools/infer_ultra_tiled.py   --weights runs/detect/runs/yolo11m_1024/stage2_unfreeze/weights/best.pt   --data-root data/test   --output submission_yolo_stage2_1024_tile   --zip submission_yolo_stage2_1024_tile.zip   --imgsz 1024 --tile 512 --overlap 0.25   --conf 0.001 --iou 0.6 --fuse-iou 0.55   --max-det 100 --batch 6 --device cuda
+```
+
+### 验证
+
+- [x] `/root/miniconda3/bin/python -m py_compile tools/infer_ultra_tiled.py` 通过。
+- [x] `/root/miniconda3/bin/python tools/infer_ultra_tiled.py --help` 通过。
+- [ ] 空闲时先用 `--limit 5` 冒烟生成 txt，确认数量和格式。
+- [ ] 全量生成 zip 后与 `submission_yolo_sar_aug_tta_768.zip`、`submission_yolo_stage2_1024_tta.zip` 做平台 A/B。
+
+---
+
 ## v0.14.0 (result) — yolo11m 1024 两阶段训练：干净数据刷新记录
 
 **日期:** 2026-08-29
