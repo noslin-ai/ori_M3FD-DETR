@@ -42,7 +42,8 @@
 - [x] `/root/miniconda3/bin/python -m py_compile tools/infer_ultra_tiled.py` 通过。
 - [x] `/root/miniconda3/bin/python tools/infer_ultra_tiled.py --help` 通过。
 - [x] `--limit 5` 冒烟生成 5 个 txt、261 个框，输出为官方归一化格式。
-- [ ] 全量生成 zip 后与 `submission_yolo_sar_aug_tta_768.zip`、`submission_yolo_stage2_1024_tta.zip` 做平台 A/B。
+- [x] 全量 768 tile+TTA 生成 `submission_yolo_sar_tile768_tta.zip`：1000 txt、89599 框、1.8M；框数明显高于历史 768 TTA 的 28623 和 1024 TTA 的 24614，建议作为激进召回候选，不要单独替代最高分提交。
+- [ ] 继续生成更保守 tile 版本，控制框数接近历史提交后再平台 A/B。
 
 ---
 
