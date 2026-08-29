@@ -4,6 +4,32 @@
 
 ---
 
+## v0.15.1 (run) — 启动干净数据 YOLO11x SAR-style 768 容量实验
+
+**日期:** 2026-08-29
+**类型:** 训练启动 / 干净数据 A-B 实验
+**背景:** v0.15.0 已先完成 inference-only 的 tile 候选提交；本次在 push 完成后启动已提交的 `configs/yolo_native_x_sar_aug.yaml`，测试更大 YOLO11x 容量是否能在 SAR-style 3ch 增强数据上超过 YOLO11m 768。继续遵守 no-pseudo-label / no-test-train 原则。
+
+### 训练命令
+
+```bash
+screen -dmS yolo_x_sar768_v015 bash -lc 'source /root/miniconda3/etc/profile.d/conda.sh && conda activate race && OMP_NUM_THREADS=8 yolo detect train cfg=configs/yolo_native_x_sar_aug.yaml > yolo_native_x_sar_aug_train_v015.log 2>&1'
+```
+
+### 数据与风险控制
+
+- 数据: `data/yolo_sar_m/data.yaml`，只包含训练集增强图与 fold1 val，不使用 `data/test`。
+- 配置: `imgsz=768, batch=6, multi_scale=false`，避免 v0.11.1 记录的多尺度 OOM。
+- 对照: 以 `runs/detect/runs/native_m_sar/rgb_sar768-2/weights/best.pt` 的 `mAP50-95=0.46663` 和平台最高候选为基线。
+- 观察: 若 60-80 epoch 仍未接近 0.46663，应停止作为消融，不强行等待。
+
+### 状态
+
+- [ ] 训练启动后记录 screen/log 路径。
+- [ ] 训练完成后记录 best epoch、mAP50、mAP50-95，并生成对照提交。
+
+---
+
 ## v0.15.0 (experiment) — 小目标 Tile 推理融合：避免伪标签污染的提交侧优化
 
 **日期:** 2026-08-29
