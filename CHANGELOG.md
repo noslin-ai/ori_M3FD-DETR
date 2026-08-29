@@ -25,7 +25,8 @@ screen -dmS yolo_x_sar768_v015 bash -lc 'source /root/miniconda3/etc/profile.d/c
 
 ### 状态
 
-- [ ] 训练启动后记录 screen/log 路径。
+- [x] 训练已启动：screen `yolo_x_sar768_v015`，日志 `yolo_native_x_sar_aug_train_v015.log`，run 目录 `runs/detect/runs/native_x_sar/rgb_sar768/`。
+- [ ] 初始 epoch1 已完成，约 10GB 显存，mAP50-95=0.18；继续观察 60-80 epoch 是否接近/超过 0.46663。
 - [ ] 训练完成后记录 best epoch、mAP50、mAP50-95，并生成对照提交。
 
 ---
