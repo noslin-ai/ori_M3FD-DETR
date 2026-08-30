@@ -4,6 +4,35 @@
 
 ---
 
+## v0.15.2 (chore) — 数据盘清理：释放约 48G（回收站 + 废弃 DINO 权重 + 中间 epoch 权重）
+
+**日期:** 2026-08-30
+**类型:** 维护 / 磁盘清理
+**背景:** 数据盘 `/root/autodl-tmp`（70G）已用 69G（99%），将阻断后续训练权重保存与数据集下载。经确认后，永久删除与当前最佳方案（v0.15.1 YOLO11x SAR 768, mAP50-95=0.46932）无关的文件。
+
+### 清理内容（数据盘 99% → 29%，可用 1.1G → 50G）
+
+| 类别 | 路径 | 释放量 |
+|------|------|--------|
+| 回收站 | `/root/autodl-tmp/.Trash-0`（含 aic_race.zip 18.4G、旧 M3FD-DETR、旧 submission、codex tar） | ~18G |
+| 废弃 DINO 权重 | `checkpoints/`（rush* 系列、latest.pth、debug、yolo_dual/fusion/rgb 试验） | ~15G |
+| 中间 epoch 权重 | `native_x_sar/rgb_sar768` 与 `native_m_sar/rgb_sar768-2` 的 `weights/epoch*.pt`（保留 best/last） | ~14G |
+| 旧 YOLO run | `runs/detect/runs/` 下 native_x、native_m、yolo11m_1024、probe、val-*、native_m_sar 的 finetune/sar_v3 试验目录 | ~1.5G |
+| 已弃用数据 | `data/yolo_sar_v3`（v0.13 伪标签+过采样，v0.15 已回归 clean） | ~1.9G |
+
+### 保留（当前最佳方案）
+
+- `runs/detect/runs/native_x_sar/rgb_sar768/weights/{best,last}.pt`（v0.15.1 最佳 0.46932）
+- `runs/detect/runs/native_m_sar/rgb_sar768-2/weights/{best,last}.pt`（v0.11.2 可信基线 0.46663）
+- `data/train`、`data/test`、`data/yolo_sar_m`、`yolo11x.pt`、全部代码
+
+### 状态
+
+- [x] 已永久删除（非回收站），执行时无训练进程
+- [x] 数据盘 99% → 29%（可用 1.1G → 50G）
+
+---
+
 ## v0.15.1 (run) — 启动干净数据 YOLO11x SAR-style 768 容量实验
 
 **日期:** 2026-08-29
