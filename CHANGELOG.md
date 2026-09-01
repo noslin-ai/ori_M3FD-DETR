@@ -38,9 +38,9 @@ screen -dmS yolo_m_trimodal_v016 bash -lc 'source /root/miniconda3/etc/profile.d
 
 ### 状态
 
-- [x] 代码、配置与本记录已准备，等待 push 后在服务器启动。
-- [ ] 数据准备：`data/yolo_trimodal_fusion_m` 与 `data/test_trimodal_fusion`。
-- [ ] 训练：`runs/native_m_trimodal/fusion768_from_sar_best`。
+- [x] 代码、配置与本记录已准备并已 push。
+- [x] 数据准备完成：data/yolo_trimodal_fusion_m 包含 train=1600、val=400，data/test_trimodal_fusion/visible 包含 test=1000；无缺失模态。
+- [ ] 训练待启动：runs/native_m_trimodal/fusion768_from_sar_best，screen yolo_m_trimodal_v016。
 - [ ] 训练完成后记录 best epoch、mAP50、mAP50-95，并决定是否生成提交包。
 
 ---
