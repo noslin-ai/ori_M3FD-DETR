@@ -4,6 +4,43 @@
 
 ---
 
+## v0.16.1 (experiment) — 三模态后融合：平台最佳主模型 + 辅助模态候选补充
+
+**日期:** 2026-09-01
+**类型:** 推理后处理 / 多模态互补 / 低风险提交候选
+**背景:** v0.16.0 的真三模态像素级替换输入只达到 mAP50-95=0.43967，说明直接改变 YOLO 预训练输入分布风险较高。本轮保留平台最佳 YOLO11m SAR 768 TTA 预测为主，只让三模态弱模型或 YOLO11x 候选在后处理阶段提供有限补充。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `tools/fuse_yolo_submissions.py` | 新增 | 支持从多个 submission 目录/zip 读取官方格式预测，按类别执行 weighted box fusion，主模型高权重、辅助模型低权重，并用 `aux-min-conf` 控制弱模型只补充较可信框 |
+
+### 论文迁移点
+
+- DEYOLO 的跨模态互补思想迁移到预测级融合，避免再改 YOLO 主干导致预训练分布漂移。
+- GLS-YOLOv8n 与茶芽 RGB-D-IR 论文强调多模态信息互补；本轮让 visible/SAR-style 主模型保持主导，IR/Depth 三模态模型只在高置信候选上参与。
+- 对密集小目标检测，使用 weighted fusion 合并相近框，避免简单拼接带来重复框暴涨。
+
+### 推荐运行
+
+```bash
+python tools/fuse_yolo_submissions.py \
+  --inputs submission_yolo_sar_aug_tta_768 submission_yolo_trimodal_tta \
+  --weights 1.0 0.35 \
+  --output submission_yolo_sar_trimodal_wbf \
+  --zip submission_yolo_sar_trimodal_wbf.zip \
+  --iou 0.55 --aux-min-conf 0.02 --max-det 100
+```
+
+### 状态
+
+- [x] 脚本与本记录已准备，等待 push 后在服务器生成三模态辅助提交并融合。
+- [ ] 生成 `submission_yolo_trimodal_tta`。
+- [ ] 生成后融合候选并记录 txt 数量、框数与 zip 大小。
+
+---
+
 ## v0.16.0 (experiment) — 真三模态融合 YOLO11m：基于平台最佳 768 权重微调
 
 **日期:** 2026-09-01
