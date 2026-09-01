@@ -33,9 +33,9 @@ screen -dmS yolo_m_trimodal_soft_v016 bash -lc 'source /root/miniconda3/etc/prof
 
 ### 状态
 
-- [x] 配置与本记录已准备，等待 push 后在服务器启动。
-- [ ] 数据准备：`data/yolo_trimodal_soft_m`。
-- [ ] 训练：`runs/native_m_trimodal/soft768_from_sar_best`。
+- [x] 配置与本记录已准备并已 push。
+- [x] 数据准备完成：data/yolo_trimodal_soft_m 包含 train=1600、val=400，标签各 1600/400。
+- [ ] 训练待启动：runs/native_m_trimodal/soft768_from_sar_best，screen yolo_m_trimodal_soft_v016。
 - [ ] 训练完成后记录 best epoch、mAP50、mAP50-95，并决定是否生成提交包。
 
 ---
