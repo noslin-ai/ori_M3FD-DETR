@@ -162,6 +162,21 @@ def process_split(split, stems, maps, root, out, args):
     return n_img, n_label
 
 
+def process_test(maps, out, args):
+    visible_out = os.path.join(out, "visible")
+    ensure_clean_dir(visible_out, overwrite=False)
+    stems = sorted(set(maps["rgb"]) & set(maps["ir"]) & set(maps["depth"]))
+    n_img = 0
+    for stem in stems:
+        image = enhance_image(
+            maps["rgb"][stem], maps["ir"][stem], maps["depth"][stem],
+            ir_weight=args.ir_weight, depth_weight=args.depth_weight, sharpen=args.sharpen,
+        )
+        cv2.imwrite(os.path.join(visible_out, f"{stem}.jpg"), image, [int(cv2.IMWRITE_JPEG_QUALITY), args.quality])
+        n_img += 1
+    return n_img
+
+
 def write_data_yaml(out):
     names_yaml = "\n".join(f"  {i}: {name}" for i, name in enumerate(CLASS_NAMES))
     content = (
@@ -178,37 +193,51 @@ def write_data_yaml(out):
 def main():
     parser = argparse.ArgumentParser(description="Prepare SAR-style enhanced 3ch YOLO data")
     parser.add_argument("--root", default="data/train")
+    parser.add_argument("--test-root", default="data/test")
     parser.add_argument("--splits", default="splits")
     parser.add_argument("--fold", type=int, default=1)
     parser.add_argument("--out", default="data/yolo_sar_m")
+    parser.add_argument("--test-out", default=None, help="optional test root with fused images under visible/")
     parser.add_argument("--ir-weight", type=float, default=0.12)
     parser.add_argument("--depth-weight", type=float, default=0.08)
     parser.add_argument("--sharpen", type=float, default=0.35)
     parser.add_argument("--quality", type=int, default=96)
     parser.add_argument("--copy-labels", action="store_true", help="copy labels instead of symlinking")
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--skip-train-val", action="store_true")
     args = parser.parse_args()
 
     root = args.root
     out = args.out
-    if args.overwrite and os.path.isdir(out):
+    if not args.skip_train_val and args.overwrite and os.path.isdir(out):
         shutil.rmtree(out)
-    ensure_clean_dir(out)
+    if not args.skip_train_val:
+        ensure_clean_dir(out)
+        train_stems = read_stems(os.path.join(args.splits, f"fold{args.fold}_train.txt"))
+        val_stems = read_stems(os.path.join(args.splits, f"fold{args.fold}_val.txt"))
+        maps = {
+            "rgb": build_map(os.path.join(root, "visible")),
+            "ir": build_map(os.path.join(root, "infrared")),
+            "depth": build_map(os.path.join(root, "depth")),
+        }
 
-    train_stems = read_stems(os.path.join(args.splits, f"fold{args.fold}_train.txt"))
-    val_stems = read_stems(os.path.join(args.splits, f"fold{args.fold}_val.txt"))
-    maps = {
-        "rgb": build_map(os.path.join(root, "visible")),
-        "ir": build_map(os.path.join(root, "infrared")),
-        "depth": build_map(os.path.join(root, "depth")),
-    }
+        print(f"fold={args.fold} train={len(train_stems)} val={len(val_stems)} out={out}")
+        tr = process_split("train", train_stems, maps, root, out, args)
+        va = process_split("val", val_stems, maps, root, out, args)
+        write_data_yaml(out)
+        print(f"done train_images={tr[0]} train_labels={tr[1]} val_images={va[0]} val_labels={va[1]}")
+        print(f"yaml={os.path.join(out, 'data.yaml')}")
 
-    print(f"fold={args.fold} train={len(train_stems)} val={len(val_stems)} out={out}")
-    tr = process_split("train", train_stems, maps, root, out, args)
-    va = process_split("val", val_stems, maps, root, out, args)
-    write_data_yaml(out)
-    print(f"done train_images={tr[0]} train_labels={tr[1]} val_images={va[0]} val_labels={va[1]}")
-    print(f"yaml={os.path.join(out, 'data.yaml')}")
+    if args.test_out:
+        if args.overwrite and os.path.isdir(args.test_out):
+            shutil.rmtree(args.test_out)
+        test_maps = {
+            "rgb": build_map(os.path.join(args.test_root, "visible")),
+            "ir": build_map(os.path.join(args.test_root, "infrared")),
+            "depth": build_map(os.path.join(args.test_root, "depth")),
+        }
+        n_test = process_test(test_maps, args.test_out, args)
+        print(f"done test_images={n_test} out={os.path.join(args.test_out, 'visible')}")
 
 
 if __name__ == "__main__":

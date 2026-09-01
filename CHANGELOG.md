@@ -36,7 +36,9 @@ screen -dmS yolo_m_trimodal_soft_v016 bash -lc 'source /root/miniconda3/etc/prof
 - [x] 配置与本记录已准备并已 push。
 - [x] 数据准备完成：data/yolo_trimodal_soft_m 包含 train=1600、val=400，标签各 1600/400。
 - [x] 训练已启动：runs/native_m_trimodal/soft768_from_sar_best，screen yolo_m_trimodal_soft_v016，日志 yolo_m_trimodal_soft_v016_train.log；YOLO11m 平台最佳权重加载 649/649。
-- [ ] 训练完成后记录 best epoch、mAP50、mAP50-95，并决定是否生成提交包。
+- [x] 训练 EarlyStopping 于 48/60；best epoch 28，最终复评 mAP50=0.747、mAP50-95=0.476，高于平台最佳 YOLO11m SAR 768 clean 基线 0.46663 和 YOLO11x SAR 768 的 0.46932。
+- [x] 扩展 `tools/prepare_yolo_sar_enhanced_data.py`，支持用相同 soft-fusion 参数生成 test/visible 推理图，避免训练/提交输入分布不一致。
+- [ ] 生成 `data/test_trimodal_soft` 和 `submission_yolo_trimodal_soft_tta.zip`，并记录 txt 数量、框数与 zip 大小。
 
 ---
 
