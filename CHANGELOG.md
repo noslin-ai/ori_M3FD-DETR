@@ -4,6 +4,32 @@
 
 ---
 
+## v0.16.3 (run) — 补跑 soft-fusion 最后 12 epoch：关闭 early stopping
+
+**日期:** 2026-09-01
+**类型:** 训练补跑 / 收敛验证
+**背景:** v0.16.2 因 `patience=20` 在 48/60 early stop，虽然 best.pt 复评已达 mAP50-95=0.476，但原计划最后 12 轮未完整执行。本轮按用户要求补跑剩余阶段，验证关闭早停后的低学习率最终收敛是否还能提升。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `configs/yolo_native_m_trimodal_soft_finish.yaml` | 新增 | 从 `soft768_from_sar_best/weights/last.pt` 接着跑 12 epoch，`patience=0`，关闭 mosaic/mixup/copy_paste，低学习率做最终 polish |
+
+### 推荐运行
+
+```bash
+screen -dmS yolo_m_trimodal_soft_finish_v016 bash -lc 'source /root/miniconda3/etc/profile.d/conda.sh && conda activate race && OMP_NUM_THREADS=8 yolo detect train cfg=configs/yolo_native_m_trimodal_soft_finish.yaml > yolo_m_trimodal_soft_finish_v016_train.log 2>&1'
+```
+
+### 状态
+
+- [x] 配置与本记录已准备，等待 push 后启动。
+- [ ] 训练：`runs/native_m_trimodal/soft768_finish60_from_last`。
+- [ ] 训练完成后对比 v0.16.2 best epoch 28 的 mAP50-95=0.476，并决定是否重新生成提交包。
+
+---
+
 ## v0.16.2 (experiment) — 三模态软融合微调：保留平台最佳输入分布
 
 **日期:** 2026-09-01
