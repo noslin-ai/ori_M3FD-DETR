@@ -89,14 +89,13 @@ def fuse_class(boxes, iou_thr):
         matched = None
         best_iou = 0.0
         for cluster in clusters:
-            rep = cluster[0]
+            rep = weighted_fuse(cluster)
             ov = iou(box, rep)
             if ov > best_iou:
                 best_iou = ov
                 matched = cluster
         if matched is not None and best_iou >= iou_thr:
             matched.append(box)
-            matched[0] = weighted_fuse(matched)
         else:
             clusters.append([box])
     return [weighted_fuse(cluster) for cluster in clusters]

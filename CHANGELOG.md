@@ -36,7 +36,8 @@ python tools/fuse_yolo_submissions.py \
 ### 状态
 
 - [x] 脚本与本记录已准备，等待 push 后在服务器生成三模态辅助提交并融合。
-- [ ] 生成 `submission_yolo_trimodal_tta`。
+- [x] 生成 `submission_yolo_trimodal_tta`。
+- [x] 修复首次运行发现的 WBF 聚类元数据问题：聚类代表框改为即时计算，不再覆盖原始带权重/来源的框。
 - [ ] 生成后融合候选并记录 txt 数量、框数与 zip 大小。
 
 ---
