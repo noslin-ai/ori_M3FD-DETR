@@ -4,6 +4,47 @@
 
 ---
 
+## v0.16.0 (experiment) — 真三模态融合 YOLO11m：基于平台最佳 768 权重微调
+
+**日期:** 2026-09-01
+**类型:** 数据融合 / 论文方法迁移 / 训练启动前记录
+**背景:** 当前平台已验证最高分仍是 `submission_yolo_sar_aug_tta_768.zip`（YOLO11m SAR-style 768 + TTA，平台 48.876）。本轮按比赛三模态要求，从该平台最佳权重继续微调，而不是切回不稳定的自写三分支检测器。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `tools/prepare_yolo_trimodal_fused_data.py` | 新增 | 将 `visible / infrared / depth` 对齐成 3 通道融合图：可见光细节、红外强度、深度结构/边缘；同时支持生成 test 融合图用于提交推理 |
+| `configs/yolo_native_m_trimodal_fusion_finetune.yaml` | 新增 | 从当前平台最佳 `native_m_sar/rgb_sar768-2/weights/best.pt` 低学习率微调 80 epoch，保持 `imgsz=768` 和干净 train/val split |
+
+### 论文迁移点
+
+- `Real-time dense small object detection algorithm based on multi-modal tea shoots`: 借鉴密集小目标场景下 RGB-D-IR 多模态互补，保留局部细节和结构边缘。
+- `GLS-YOLOv8n`: 借鉴 RGB-depth-thermal 的通道级互补思想，用可见光纹理、红外显著性、深度结构分别占据 3 个输入通道。
+- `DEYOLO`: 借鉴跨模态增强思路，先对各模态做轻量 CLAHE/去噪/边缘增强，再交给 YOLO 学习，避免直接大改 Ultralytics 骨架造成训练不稳定。
+
+### 风险控制
+
+- 不使用伪标签，不把 `data/test` 写入训练集；test 融合图仅用于最终推理。
+- 使用 YOLO11m 平台最佳权重微调，避免 YOLO11x 本地略高但平台未验证的路线直接替代。
+- 第一阶段先跑 80 epoch 消融；若本地验证未追近 0.46663，则不生成主提交。
+
+### 推荐运行
+
+```bash
+python tools/prepare_yolo_trimodal_fused_data.py --fold 1 --overwrite
+screen -dmS yolo_m_trimodal_v016 bash -lc 'source /root/miniconda3/etc/profile.d/conda.sh && conda activate race && OMP_NUM_THREADS=8 yolo detect train cfg=configs/yolo_native_m_trimodal_fusion_finetune.yaml > yolo_m_trimodal_v016_train.log 2>&1'
+```
+
+### 状态
+
+- [x] 代码、配置与本记录已准备，等待 push 后在服务器启动。
+- [ ] 数据准备：`data/yolo_trimodal_fusion_m` 与 `data/test_trimodal_fusion`。
+- [ ] 训练：`runs/native_m_trimodal/fusion768_from_sar_best`。
+- [ ] 训练完成后记录 best epoch、mAP50、mAP50-95，并决定是否生成提交包。
+
+---
+
 ## v0.15.2 (chore) — 数据盘清理：释放约 48G（回收站 + 废弃 DINO 权重 + 中间 epoch 权重）
 
 **日期:** 2026-08-30
