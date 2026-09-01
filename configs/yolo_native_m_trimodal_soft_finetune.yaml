@@ -1,0 +1,48 @@
+# YOLO11m conservative tri-modal soft-fusion fine-tune.
+#
+# This run keeps the proven SAR-style / RGB-compatible YOLO path but regenerates
+# the data with weaker IR/depth injection:
+#
+#   python tools/prepare_yolo_sar_enhanced_data.py \
+#     --fold 1 --out data/yolo_trimodal_soft_m \
+#     --ir-weight 0.08 --depth-weight 0.04 --sharpen 0.25 --overwrite
+#
+# It is a lower-risk follow-up after the true tri-modal replacement experiment
+# underperformed. The goal is to preserve ImageNet/YOLO color priors while still
+# borrowing complementary IR saliency and depth edges.
+
+model: runs/detect/runs/native_m_sar/rgb_sar768-2/weights/best.pt
+data: data/yolo_trimodal_soft_m/data.yaml
+epochs: 60
+imgsz: 768
+batch: 8
+device: 0
+workers: 8
+seed: 42
+project: runs/native_m_trimodal
+name: soft768_from_sar_best
+exist_ok: false
+pretrained: true
+optimizer: AdamW
+lr0: 0.00018
+lrf: 0.02
+weight_decay: 0.0005
+warmup_epochs: 2.0
+cos_lr: true
+close_mosaic: 10
+mosaic: 0.7
+mixup: 0.06
+copy_paste: 0.04
+scale: 0.45
+translate: 0.08
+fliplr: 0.5
+flipud: 0.0
+hsv_h: 0.006
+hsv_s: 0.18
+hsv_v: 0.16
+multi_scale: false
+patience: 20
+save_period: 5
+val: true
+plots: true
+amp: true

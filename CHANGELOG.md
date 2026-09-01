@@ -4,6 +4,42 @@
 
 ---
 
+## v0.16.2 (experiment) — 三模态软融合微调：保留平台最佳输入分布
+
+**日期:** 2026-09-01
+**类型:** 训练配置 / 保守三模态优化
+**背景:** v0.16.0 真三模态像素级替换输入只到 mAP50-95=0.43967，说明直接改变 YOLO 预训练输入分布会伤害检测效果。本轮改为更温和的三模态软融合：仍保留 RGB 色彩与 SAR-style 亮度增强路线，仅降低 IR/Depth 注入强度，尝试在不破坏平台最佳分布的前提下吸收跨模态互补信息。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `configs/yolo_native_m_trimodal_soft_finetune.yaml` | 新增 | 从平台最佳 YOLO11m SAR 768 权重继续微调 60 epoch，使用弱 IR/Depth 注入数据 `data/yolo_trimodal_soft_m`，低 lr、弱增强、`close_mosaic=10` |
+
+### 论文迁移点
+
+- 保留 DEYOLO/GLS-YOLOv8n/茶芽多模态互补思想，但不再把三模态强行替换为独立通道。
+- 可见光仍提供主纹理和颜色先验；IR/Depth 只作为亮度显著性和结构边缘的弱残差信息。
+- 降低 mosaic/mixup/copy-paste 强度，避免小目标和多模态细节在二次增强中被过度扰动。
+
+### 推荐运行
+
+```bash
+python tools/prepare_yolo_sar_enhanced_data.py \
+  --fold 1 --out data/yolo_trimodal_soft_m \
+  --ir-weight 0.08 --depth-weight 0.04 --sharpen 0.25 --overwrite
+screen -dmS yolo_m_trimodal_soft_v016 bash -lc 'source /root/miniconda3/etc/profile.d/conda.sh && conda activate race && OMP_NUM_THREADS=8 yolo detect train cfg=configs/yolo_native_m_trimodal_soft_finetune.yaml > yolo_m_trimodal_soft_v016_train.log 2>&1'
+```
+
+### 状态
+
+- [x] 配置与本记录已准备，等待 push 后在服务器启动。
+- [ ] 数据准备：`data/yolo_trimodal_soft_m`。
+- [ ] 训练：`runs/native_m_trimodal/soft768_from_sar_best`。
+- [ ] 训练完成后记录 best epoch、mAP50、mAP50-95，并决定是否生成提交包。
+
+---
+
 ## v0.16.1 (experiment) — 三模态后融合：平台最佳主模型 + 辅助模态候选补充
 
 **日期:** 2026-09-01
