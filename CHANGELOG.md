@@ -41,7 +41,8 @@ screen -dmS yolo_m_trimodal_v016 bash -lc 'source /root/miniconda3/etc/profile.d
 - [x] 代码、配置与本记录已准备并已 push。
 - [x] 数据准备完成：data/yolo_trimodal_fusion_m 包含 train=1600、val=400，data/test_trimodal_fusion/visible 包含 test=1000；无缺失模态。
 - [x] 训练已启动：runs/native_m_trimodal/fusion768_from_sar_best，screen yolo_m_trimodal_v016，日志 yolo_m_trimodal_v016_train.log；YOLO11m 平台最佳权重加载 649/649。
-- [ ] 训练完成后记录 best epoch、mAP50、mAP50-95，并决定是否生成提交包。
+- [x] 训练完成：80/80，best epoch 64，mAP50=0.70673，mAP50-95=0.43967；低于平台最佳 YOLO11m SAR 768 clean 基线 0.46663，也低于 YOLO11x SAR 768 的 0.46932。
+- [x] 结论：真三模态像素级替换输入带来明显预训练分布偏移，不生成主提交包；后续三模态应采用更温和的 RGB/SAR-style 主干 + IR/Depth 辅助增强或推理重打分。
 
 ---
 
