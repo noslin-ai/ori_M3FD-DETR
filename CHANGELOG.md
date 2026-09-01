@@ -38,7 +38,10 @@ python tools/fuse_yolo_submissions.py \
 - [x] 脚本与本记录已准备，等待 push 后在服务器生成三模态辅助提交并融合。
 - [x] 生成 `submission_yolo_trimodal_tta`。
 - [x] 修复首次运行发现的 WBF 聚类元数据问题：聚类代表框改为即时计算，不再覆盖原始带权重/来源的框。
-- [ ] 生成后融合候选并记录 txt 数量、框数与 zip 大小。
+- [x] 生成后融合候选并完成校验：
+  - submission_yolo_trimodal_tta.zip：1000 txt，35440 框，767K，仅作为辅助源，不建议单独提交。
+  - submission_yolo_sar_trimodal_wbf.zip：1000 txt，26873 框，617K；平台最佳 SAR 768 TTA 主导，三模态高置信框辅助。
+  - submission_yolo_sar_x_trimodal_wbf.zip：1000 txt，28085 框，640K；SAR 768 TTA + YOLO11x SAR 768 + 三模态辅助，框数接近历史最佳 28623，优先作为 A/B 候选。
 
 ---
 
