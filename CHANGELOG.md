@@ -31,7 +31,9 @@ screen -dmS yolo_m_trimodal_soft_labelrefresh_v017 bash -lc 'source /root/minico
 - [x] 远端已 `git pull --ff-only` 到 `bff3c50`，并删除 `data/yolo_sar_m`、`data/yolo_trimodal_soft_m` 下旧 `labels.cache`。
 - [x] 重新训练完成：`runs/native_m_trimodal/soft768_labelrefresh_from_sar_best`，80/80，best epoch 66。
 - [x] 最终复评：mAP50=0.759、mAP50-95=0.472；`results.csv` 精确 best 为 epoch 66，mAP50=0.75973、mAP50-95=0.47325。
-- [ ] 重新生成提交包，旧 soft-fusion early-stop 结果仅作废弃参考。
+- [x] 生成召回型提交包 `submission_yolo_trimodal_soft_labelrefresh_tta.zip`：1000 txt，89211 框，1.8M；使用 full+tile+TTA，框数过高，仅作高召回备选。
+- [x] 生成稳健提交包 `submission_yolo_trimodal_soft_labelrefresh_full_tta.zip`：1000 txt，21124 框，512K；使用 full-image TTA，不开 tile，建议优先平台 A/B。
+- [x] 旧 soft-fusion early-stop 结果仅作废弃参考；本轮结果以 2026-09-02 新标签训练后的 epoch 66 best.pt 为准。
 
 ---
 
