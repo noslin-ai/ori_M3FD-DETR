@@ -4,6 +4,35 @@
 
 ---
 
+## v0.17.0 (experiment) — 适配队长 2026-09-02 新标签：清 YOLO cache 后重训 soft-fusion
+
+**日期:** 2026-09-02
+**类型:** 数据标签刷新 / 训练配置 / 三模态保守优化
+**背景:** 队长已将修正后的训练标签覆盖到 `data/train/labels`。远端检查确认 `data/yolo_sar_m/*/labels` 和 `data/yolo_trimodal_soft_m/*/labels` 都是软链接，能够跟随新标签；但 Ultralytics 的 `labels.cache` 仍停留在 2026-08-28 或 2026-09-01，早于新标签时间 2026-09-02 00:12，因此旧验证和 early-stop 结论不再可靠。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `configs/yolo_native_m_trimodal_soft_labelrefresh.yaml` | 新增 | 从平台最佳 SAR-style YOLO11m 权重重新微调三模态 soft-fusion，独立 run 名 `soft768_labelrefresh_from_sar_best`，避免复用旧标签训练痕迹 |
+
+### 执行要点
+
+```bash
+find data/yolo_sar_m data/yolo_trimodal_soft_m -name "*.cache" -delete
+screen -dmS yolo_m_trimodal_soft_labelrefresh_v017 bash -lc 'source /root/miniconda3/etc/profile.d/conda.sh && conda activate race && OMP_NUM_THREADS=8 yolo detect train cfg=configs/yolo_native_m_trimodal_soft_labelrefresh.yaml > yolo_m_trimodal_soft_labelrefresh_v017_train.log 2>&1'
+```
+
+### 状态
+
+- [x] 远端只读确认：`data/train/labels` 共 2000 个标签，时间戳为 2026-09-02 00:12。
+- [x] 远端只读确认：YOLO 派生标签目录为软链接，`find -L` 后 `train=1600`、`val=400`。
+- [x] 配置与本记录已准备，等待 push 后清理旧 cache 并启动训练。
+- [ ] 删除旧 `labels.cache` 后重新训练，避免沿用旧标签缓存。
+- [ ] 训练完成后重新生成提交包，旧 soft-fusion early-stop 结果仅作废弃参考。
+
+---
+
 ## v0.16.3 (run) — 补跑 soft-fusion 最后 12 epoch：关闭 early stopping
 
 **日期:** 2026-09-01
