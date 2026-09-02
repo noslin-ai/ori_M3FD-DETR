@@ -29,8 +29,9 @@ screen -dmS yolo_m_trimodal_soft_labelrefresh_v017 bash -lc 'source /root/minico
 - [x] 远端只读确认：YOLO 派生标签目录为软链接，`find -L` 后 `train=1600`、`val=400`。
 - [x] 配置与本记录已准备并已 push：commit `bff3c50`。
 - [x] 远端已 `git pull --ff-only` 到 `bff3c50`，并删除 `data/yolo_sar_m`、`data/yolo_trimodal_soft_m` 下旧 `labels.cache`。
-- [ ] 重新训练 `runs/native_m_trimodal/soft768_labelrefresh_from_sar_best`，避免沿用旧标签缓存。
-- [ ] 训练完成后重新生成提交包，旧 soft-fusion early-stop 结果仅作废弃参考。
+- [x] 重新训练完成：`runs/native_m_trimodal/soft768_labelrefresh_from_sar_best`，80/80，best epoch 66。
+- [x] 最终复评：mAP50=0.759、mAP50-95=0.472；`results.csv` 精确 best 为 epoch 66，mAP50=0.75973、mAP50-95=0.47325。
+- [ ] 重新生成提交包，旧 soft-fusion early-stop 结果仅作废弃参考。
 
 ---
 
