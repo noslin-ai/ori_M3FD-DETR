@@ -4,6 +4,42 @@
 
 ---
 
+## v0.17.1 (experiment) — DEYOLO/GLS 启发的 gated 三模态局部增强
+
+**日期:** 2026-09-02
+**类型:** 数据融合策略 / 训练配置 / 小目标边界增强
+**背景:** v0.17.0 的 soft-fusion 在新标签上 best mAP50-95=0.47325，说明弱三模态注入有效但还没有拉开差距。进一步参考 DEYOLO 的跨模态双特征增强、GLS-YOLOv8n 的 RGB-depth-thermal 互补，以及多模态茶芽小目标检测中强调的密集小目标局部显著性，本轮改为局部 gate：仅在红外局部显著或深度边缘强的位置注入残差信号，减少整图亮度分布漂移。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `tools/prepare_yolo_sar_enhanced_data.py` | 修改 | 新增 `--fusion-mode gated`，用 IR 局部显著残差和 depth edge gate 做局部增强，保留原 `soft` 模式兼容 |
+| `configs/yolo_native_m_trimodal_gated_labelrefresh.yaml` | 新增 | 从平台最佳 SAR-style YOLO11m 权重训练 gated 三模态数据，run 名 `gated768_labelrefresh_from_sar_best` |
+
+### 推荐运行
+
+```bash
+python tools/prepare_yolo_sar_enhanced_data.py \
+  --fold 1 \
+  --out data/yolo_trimodal_gated_m \
+  --test-out data/test_trimodal_gated \
+  --ir-weight 0.18 \
+  --depth-weight 0.10 \
+  --sharpen 0.24 \
+  --fusion-mode gated \
+  --overwrite
+screen -dmS yolo_m_trimodal_gated_labelrefresh_v0171 bash -lc 'source /root/miniconda3/etc/profile.d/conda.sh && conda activate race && OMP_NUM_THREADS=8 yolo detect train cfg=configs/yolo_native_m_trimodal_gated_labelrefresh.yaml > yolo_m_trimodal_gated_labelrefresh_v0171_train.log 2>&1'
+```
+
+### 状态
+
+- [x] 代码、配置与本记录已准备，等待 push 后在服务器生成 gated 数据并训练。
+- [ ] 生成 `data/yolo_trimodal_gated_m` 与 `data/test_trimodal_gated`。
+- [ ] 训练完成后与 v0.17.0 soft best mAP50-95=0.47325 对比。
+
+---
+
 ## v0.17.0 (experiment) — 适配队长 2026-09-02 新标签：清 YOLO cache 后重训 soft-fusion
 
 **日期:** 2026-09-02

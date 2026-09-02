@@ -1,0 +1,54 @@
+# YOLO11m gated tri-modal enhancement after the 2026-09-02 label refresh.
+#
+# This is a more DEYOLO/GLS-inspired follow-up to soft fusion:
+# - keep RGB/SAR-style luminance as the base signal for YOLO pretraining fit;
+# - inject IR only as local saliency residuals instead of global brightness;
+# - inject depth as an edge-gated boundary/detail cue for dense small objects.
+#
+# Prepare data and matching test images first:
+#
+#   python tools/prepare_yolo_sar_enhanced_data.py \
+#     --fold 1 \
+#     --out data/yolo_trimodal_gated_m \
+#     --test-out data/test_trimodal_gated \
+#     --ir-weight 0.18 \
+#     --depth-weight 0.10 \
+#     --sharpen 0.24 \
+#     --fusion-mode gated \
+#     --overwrite
+
+model: runs/detect/runs/native_m_sar/rgb_sar768-2/weights/best.pt
+data: data/yolo_trimodal_gated_m/data.yaml
+epochs: 80
+imgsz: 768
+batch: 8
+device: 0
+workers: 8
+seed: 42
+project: runs/native_m_trimodal
+name: gated768_labelrefresh_from_sar_best
+exist_ok: false
+pretrained: true
+optimizer: AdamW
+lr0: 0.00016
+lrf: 0.02
+weight_decay: 0.0005
+warmup_epochs: 2.0
+cos_lr: true
+close_mosaic: 12
+mosaic: 0.55
+mixup: 0.04
+copy_paste: 0.03
+scale: 0.38
+translate: 0.07
+fliplr: 0.5
+flipud: 0.0
+hsv_h: 0.004
+hsv_s: 0.12
+hsv_v: 0.12
+multi_scale: false
+patience: 25
+save_period: 5
+val: true
+plots: true
+amp: true

@@ -83,7 +83,7 @@ def sobel_edges(x):
     return to_uint8_norm(mag)
 
 
-def enhance_image(rgb_path, ir_path, depth_path, ir_weight=0.12, depth_weight=0.08, sharpen=0.35):
+def enhance_image(rgb_path, ir_path, depth_path, ir_weight=0.12, depth_weight=0.08, sharpen=0.35, fusion_mode="soft"):
     bgr = cv2.imread(rgb_path, cv2.IMREAD_COLOR)
     if bgr is None:
         raise FileNotFoundError(rgb_path)
@@ -108,12 +108,24 @@ def enhance_image(rgb_path, ir_path, depth_path, ir_weight=0.12, depth_weight=0.
     ir_eq = clahe.apply(cv2.medianBlur(ir, 3))
     depth_edge = sobel_edges(depth)
 
-    base_weight = max(0.0, 1.0 - ir_weight - depth_weight)
-    l_mix = (
-        base_weight * l_eq.astype(np.float32)
-        + ir_weight * ir_eq.astype(np.float32)
-        + depth_weight * depth_edge.astype(np.float32)
-    )
+    if fusion_mode == "soft":
+        base_weight = max(0.0, 1.0 - ir_weight - depth_weight)
+        l_mix = (
+            base_weight * l_eq.astype(np.float32)
+            + ir_weight * ir_eq.astype(np.float32)
+            + depth_weight * depth_edge.astype(np.float32)
+        )
+    elif fusion_mode == "gated":
+        base = l_eq.astype(np.float32)
+        ir_local = ir_eq.astype(np.float32) - cv2.GaussianBlur(ir_eq, (0, 0), sigmaX=5.0).astype(np.float32)
+        ir_saliency = to_uint8_norm(np.maximum(ir_local, 0.0)).astype(np.float32)
+        edge = depth_edge.astype(np.float32)
+        gate = np.maximum(ir_saliency, edge) / 255.0
+        gate = cv2.GaussianBlur(gate, (0, 0), sigmaX=1.0)
+        ir_residual = np.clip(ir_local, -48.0, 48.0)
+        l_mix = base + gate * (ir_weight * ir_residual + depth_weight * edge)
+    else:
+        raise ValueError(f"unsupported fusion_mode: {fusion_mode}")
     l_mix = np.clip(l_mix, 0, 255).astype(np.uint8)
 
     blur = cv2.GaussianBlur(l_mix, (0, 0), sigmaX=1.0)
@@ -150,7 +162,7 @@ def process_split(split, stems, maps, root, out, args):
             continue
         image = enhance_image(
             maps["rgb"][stem], maps["ir"][stem], maps["depth"][stem],
-            ir_weight=args.ir_weight, depth_weight=args.depth_weight, sharpen=args.sharpen,
+            ir_weight=args.ir_weight, depth_weight=args.depth_weight, sharpen=args.sharpen, fusion_mode=args.fusion_mode,
         )
         cv2.imwrite(os.path.join(img_dir, f"{stem}.jpg"), image, [int(cv2.IMWRITE_JPEG_QUALITY), args.quality])
         n_img += 1
@@ -170,7 +182,7 @@ def process_test(maps, out, args):
     for stem in stems:
         image = enhance_image(
             maps["rgb"][stem], maps["ir"][stem], maps["depth"][stem],
-            ir_weight=args.ir_weight, depth_weight=args.depth_weight, sharpen=args.sharpen,
+            ir_weight=args.ir_weight, depth_weight=args.depth_weight, sharpen=args.sharpen, fusion_mode=args.fusion_mode,
         )
         cv2.imwrite(os.path.join(visible_out, f"{stem}.jpg"), image, [int(cv2.IMWRITE_JPEG_QUALITY), args.quality])
         n_img += 1
@@ -201,6 +213,7 @@ def main():
     parser.add_argument("--ir-weight", type=float, default=0.12)
     parser.add_argument("--depth-weight", type=float, default=0.08)
     parser.add_argument("--sharpen", type=float, default=0.35)
+    parser.add_argument("--fusion-mode", choices=("soft", "gated"), default="soft")
     parser.add_argument("--quality", type=int, default=96)
     parser.add_argument("--copy-labels", action="store_true", help="copy labels instead of symlinking")
     parser.add_argument("--overwrite", action="store_true")
