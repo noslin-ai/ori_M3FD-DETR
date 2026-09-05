@@ -4,6 +4,54 @@
 
 ---
 
+## v0.18.1 (result) — rareos 平台回退 + fold 诊断 + soft1024 训练与提交
+
+**日期:** 2026-09-05
+**类型:** 平台结果分析 / 验证策略诊断 / 分辨率实验 / 提交产物
+**背景:** v0.18.0 rareos 提交平台 A/B 得 **50.1870**，低于平台最佳 soft_labelrefresh 的 **50.5050**（尽管 rareos 在 fold1 val 上 mAP50-95=0.4974 更高）。据此做根因分析与 fold 交叉诊断，并启动 soft+1024 高分辨率路线。
+
+### rareos 平台掉分根因（整图重采样的先验漂移）
+
+- 整图复制含稀缺类(boat/ball/tricycle)的图，但这类图本身混有大量 person/animal/light/car，导致大类样本连带抬升：person 1.14×、animal 1.12×、light 1.12×、car 1.09×——整体类别先验向右漂移。
+- 提交框量 21124→25571(+21%)，animal +2091 框(+49%)，大类低质 FP 泛滥 → precision 下降 → 平台分降。
+- 根因：fold1 val 与 rareos 训练图同分布，val 上放大先验"看似更好"；真实测试与 fold1 分布偏移，放大先验即露馅。**与 v0.13 伪标签/uav 过采样、1024 平台降同因：任何改变类别先验的改动，fold1 val 都测不出来。**
+
+### fold 诊断（验证集分布偏移）
+
+- 数据有 27 张 640×360 + 373 张 1920×1080 混尺寸。
+- 逐 fold val 类别分布差异大：fold1 animal=733 明显偏多、car=351 偏少；fold2 animal=589、car=450 更接近整体平均。
+- rareos 在 fold2 val mAP50-95=0.7685 < soft_labelrefresh 0.7852，与平台实测方向一致 → **fold2 比 fold1 更接近平台测试分布**（animal 少、car/uav 多）。
+- ⚠️ 但注意 fold2 的 400 图全在 fold1 train 内（训练内记忆，非干净留出），绝对分虚高，仅相对差异有参考。
+
+### soft+1024 训练（无先验改动，纯分辨率）
+
+从平台最佳 soft768 权重 + soft 融合数据微调至 imgsz=1024（无重采样/无伪标签）：
+
+- run `soft1024_from_soft768_best`：early-stop@58，**fold1(干净留出) best epoch 27，mAP50=0.77829 / mAP50-95=0.49589**，高于 soft768 的 0.47325(+0.023)。
+- 关键观察：fold1 干净曲线 ep27 见顶(0.496)后回落至 ~0.478；而 fold2(训练内)分数随 epoch 单调升至 last(58) 0.809 —— fold2 上升是训练记忆非泛化，**不可作为平台代理**。
+- 结论：best.pt(ep27)=0.49589 是干净留出最高分，且为纯分辨率增益（无先验改动），较 rareos 可信。
+
+### 提交产物（soft1024 best.pt ep27）
+
+- `submission_soft1024_ab00.zip`：imgsz=1024、full-image TTA、conf=0.001，1000 txt / 39374 框，格式校验通过。
+- ⚠️ 框量 39374 明显高于 soft768 的 21124。按历史经验框量暴涨平台常掉分，但 soft1024 干净 fold1=0.496 是真实增益，故值得一次平台 A/B 判定。
+
+### 工具脚本修复（本轮）
+
+- `tools/scan_conf_per_class.py`：GPU 一次前向缓存 `.npz` → CPU「前缀精确法」重扫（贪心降序，去低分尾不影响前缀 TP/FP，精确等价；per-class O(1) 阈值）；修复逐图 orig_shape 换算 GT（640×360/1920×1080 混尺寸）；修复相对路径 cache 的 makedirs 崩溃。
+- `tools/infer_ultra_tiled.py`：新增 `--perclass-conf JSON`（融合 NMS 后按类砍框）。
+- `tools/oversample_rare_clean.py`、`configs/rareos_labelrefresh.yaml`、`scripts_5090/run_submission_ab.sh`：v0.18.0 新增。
+
+### 状态
+
+- [x] rareos ab00 平台 50.1870（回退，不主推）。
+- [x] rareos vs soft fold2 诊断：证实整图重采样先验漂移。
+- [x] soft1024 训练完成：fold1 best 0.49589(ep27)。
+- [x] submission_soft1024_ab00.zip 已生成。
+- [ ] soft1024 ab00 平台 A/B 结果待队长回报（判断 1024 路线方向是否坐实）。
+
+---
+
 ## v0.18.0 (experiment) — 干净少数类重采样 rareos + per-class 阈值扫描工具 + rareos 提交
 
 **日期:** 2026-09-05
