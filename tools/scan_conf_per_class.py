@@ -187,6 +187,16 @@ def run_predict(weights, val_images, val_labels, imgsz, tta, batch, device, cach
     return per_class
 
 
+def ap_class_only(pcd, c, cutoff):
+    """mAP50-95 for a single class c only (fast for sweeping one class)."""
+    preds = [p for p in pcd[c]["preds"] if p[0] >= cutoff]
+    gts = pcd[c]["gts"]
+    if not gts:
+        return 0.0
+    aps = [ap_at_iou(gts, preds, t) for t in IOU_THRESHOLDS]
+    return float(np.mean(aps))
+
+
 def sweep(per_class):
     print("=" * 70)
     print("  [CPU sweep] per-class confidence thresholds")
@@ -199,19 +209,15 @@ def sweep(per_class):
     print(f"\nbaseline (all classes conf=0.001): mAP50-95 = {base_map:.4f}")
     print(f"{'class':<12}{'baseAP':>8}{'bestConf':>9}{'bestAP':>8}{'delta':>7}")
     best_conf = {}
-    total_delta = 0.0
     for c in range(NC):
         name = CLASS_NAMES[c]
         best_ap, best_t = base_ap[c], 0.001
         for t in grid:
-            m, _ = map_for_conf(per_class, {c: float(t)})
-            # recompute per-class only
-            ap_c = _[c]
+            ap_c = ap_class_only(per_class, c, float(t))
             if ap_c > best_ap:
                 best_ap, best_t = ap_c, float(t)
         best_conf[c] = best_t
         delta = best_ap - base_ap[c]
-        total_delta += delta
         print(f"{name:<12}{base_ap[c]:>8.4f}{best_t:>9.4f}{best_ap:>8.4f}{delta:>+7.4f}")
 
     # combined map with per-class best
@@ -223,6 +229,7 @@ def sweep(per_class):
     for c in range(NC):
         print(f"  {CLASS_NAMES[c]:<12} -> conf = {best_conf[c]:.4f}")
     print("\nNOTE: in-sample (val) estimate; hidden-test gain is smaller but same sign.")
+    return best_conf
 
 
 def main():
@@ -237,6 +244,8 @@ def main():
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--sweep-only", action="store_true",
                     help="load cache and only sweep (no GPU)")
+    ap.add_argument("--out-json", default=None,
+                    help="write per-class best conf to a JSON file for inference (--perclass-conf)")
     args = ap.parse_args()
 
     if args.sweep_only and args.cache and os.path.exists(args.cache):
@@ -246,7 +255,13 @@ def main():
     else:
         per_class = run_predict(args.weights, args.val_images, args.val_labels,
                                 args.imgsz, args.tta, args.batch, args.device, args.cache)
-    sweep(per_class)
+    best_conf = sweep(per_class)
+
+    if args.out_json:
+        import json
+        with open(args.out_json, "w") as fh:
+            json.dump({str(c): best_conf[c] for c in range(NC)}, fh, indent=2)
+        print(f"\nwrote per-class thresholds -> {args.out_json}")
 
 
 if __name__ == "__main__":

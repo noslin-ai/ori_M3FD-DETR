@@ -127,6 +127,7 @@ def write_submission(
     height: int,
     fuse_iou: float,
     max_det: int,
+    perclass_conf: dict = None,
 ) -> int:
     if not preds:
         out_path.write_text("")
@@ -138,6 +139,16 @@ def write_submission(
     classes = arr[:, 5].astype(np.int64)
     keep = classwise_nms(boxes, scores, classes, fuse_iou)
     if keep.size > 0:
+        # optional per-class confidence threshold (applied AFTER fusion NMS)
+        if perclass_conf:
+            cls_of = classes[keep]
+            sc_of = scores[keep]
+            mask = np.ones(len(keep), dtype=bool)
+            for c, thr in perclass_conf.items():
+                c = int(c)
+                if thr and thr > 0:
+                    mask &= ~((cls_of == c) & (sc_of < thr))
+            keep = keep[mask]
         keep = keep[np.argsort(-scores[keep])[:max_det]]
 
     lines = []
@@ -172,6 +183,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tile", type=int, default=512, help="Tile side length in original pixels; 0 disables tiles")
     parser.add_argument("--overlap", type=float, default=0.25, help="Tile overlap ratio in [0, 0.9)")
     parser.add_argument("--conf", type=float, default=0.001, help="Prediction confidence threshold")
+    parser.add_argument("--perclass-conf", default=None,
+                        help="Optional JSON file mapping class_id -> conf threshold, e.g. {\"7\":0.003,\"11\":0.001}. Applied AFTER fusion NMS: a box is dropped if its class's threshold > 0 and score < threshold. Class ids absent from the map keep --conf.")
     parser.add_argument("--iou", type=float, default=0.6, help="Ultralytics per-view NMS IoU")
     parser.add_argument("--fuse-iou", type=float, default=0.55, help="Final class-wise NMS IoU across full image and tiles")
     parser.add_argument("--max-det", type=int, default=100, help="Max boxes per image after fusion")
@@ -187,6 +200,14 @@ def main() -> None:
     args = parse_args()
     if not 0.0 <= args.overlap < 0.9:
         raise ValueError("--overlap must be in [0, 0.9)")
+
+    # optional per-class conf json
+    perclass_conf = None
+    if args.perclass_conf:
+        import json as _json
+        with open(args.perclass_conf) as fh:
+            perclass_conf = {int(k): float(v) for k, v in _json.load(fh).items()}
+        print(f"  perclass_conf loaded: {perclass_conf}")
 
     visible_dir = Path(args.data_root) / "visible"
     if not visible_dir.is_dir():
@@ -243,7 +264,7 @@ def main() -> None:
             for result, (dx, dy) in zip(results, offsets):
                 append_result(preds, result, dx, dy, width, height)
 
-        n = write_submission(output_dir / f"{image_path.stem}.txt", preds, width, height, args.fuse_iou, args.max_det)
+        n = write_submission(output_dir / f"{image_path.stem}.txt", preds, width, height, args.fuse_iou, args.max_det, perclass_conf)
         total_boxes += n
         if image_idx % 100 == 0 or image_idx == len(images):
             print(f"  [{image_idx:4d}/{len(images)}] total_boxes={total_boxes}")
