@@ -4,6 +4,41 @@
 
 ---
 
+## v0.18.4 (experiment) — 全量重采样 full2000rareos + 1024：稀缺类补强尝试
+
+**日期:** 2026-09-05
+**类型:** 数据策略 / 训练 / 提交产物
+**背景:** v0.18.3 发现 full2000cont（全量 1800 + 1024 + 无早停续训）平台 51.322 新最佳，证明"全量数据 + 充分训练"是真正赢点，此前 rareos(fold1 1600)掉分主因是数据量不足而非重采样本身。本轮把稀缺类重采样叠加到全量数据上，试图在保留 51.322 数据量优势的同时补强 boat/ball/tricycle（12 类等权 mAP 的短板）。
+
+### 方案
+
+- 数据：全量 1800 train 上做干净整图重采样（boat 2x/ball 2x/tricycle 4x），train 1800→1972（+172 dup）。person 连带仅 1.12x（被全量稀释，远温和于 fold1-rareos）。
+- 配置：从 full2000cont best（平台 51.322）起步，imgsz=1024、batch16、patience=999（不早停，80 轮跑满）。
+- run `full2000rareos_soft1024`。
+
+### 结果（200-val）
+
+- best ep7 mAP50=0.91334 / **mAP50-95=0.65198**，80 轮跑满。
+- per-class（200-val）：person 0.617 / boat 0.604 / animal 0.724 / car 0.613 / ball 0.546 / tricycle 0.764，无塌缩。
+- 与 full2000cont（200-val 0.658）相当；注：200-val 已被证明不能预测平台（full2000cont 0.658→平台51.32；soft1024 0.496→平台49.64，负相关），故优劣只能平台 A/B 定。
+
+### 提交产物
+
+- `submission_full2000rareos_ab00.zip`：imgsz=1024、full TTA、conf=0.001，1000 txt / 30505 框。
+- 类别分布对比 full2000cont：tricycle 20→**78**（近4x，重采样主增强类）；boat 持平、ball 略降。
+
+### 方法学（本轮确认）
+
+- **fold1-1600 是多年掉分共同根因**：rareos/soft1024 都只用 fold1 1600，浪费 20% 数据；full2000 用全量后平台 +0.8 起。
+- **early-stop 持续误导**：full2000 首轮早停在 ep3、soft1024 早停在 ep27，都砍掉了平台真正认可的更久训练；本轮 patience=999。
+
+### 状态
+
+- [x] full2000rareos ab00 已生成，待平台 A/B（判断全量+重采样是否超 51.322）。
+- [ ] fold2 CV 已暂停（验证 fold1-1600 思路已被证非最优，不耗 GPU）。
+
+---
+
 ## v0.18.3 (result) — 平台里程碑：full2000cont ab00 = 51.3220 新最佳（超越 soft768 50.505）
 
 **日期:** 2026-09-05
