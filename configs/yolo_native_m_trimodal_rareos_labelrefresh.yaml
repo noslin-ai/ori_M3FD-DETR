@@ -1,0 +1,51 @@
+# YOLO11m clean rare-class oversampling fine-tune (after 2026-09-02 label refresh).
+#
+# Same recipe as the platform-best soft_labelrefresh run, but the TRAIN split is
+# augmented by clean image-level duplication of images that contain genuinely rare
+# classes (boat/ball/tricycle). val is untouched. This isolates the effect of rare-
+# class oversampling so we can A/B against soft_labelrefresh (mAP50-95=0.47325).
+#
+# Data prep (CPU, instant, ~0 disk via hard links):
+#   python tools/oversample_rare_clean.py \
+#     --src data/yolo_trimodal_soft_m \
+#     --dst data/yolo_trimodal_soft_m_rareos \
+#     --mult 1:2,7:2,11:4
+#
+# IMPORTANT pre-flight (stale cache from before label refresh):
+#   find data/yolo_trimodal_soft_m_rareos -name "*.cache" -delete
+
+model: runs/detect/runs/native_m_sar/rgb_sar768-2/weights/best.pt
+data: data/yolo_trimodal_soft_m_rareos/data.yaml
+epochs: 80
+imgsz: 768
+batch: 8
+device: 0
+workers: 8
+seed: 42
+project: runs/native_m_trimodal
+name: rareos768_labelrefresh_from_sar_best
+exist_ok: false
+pretrained: true
+optimizer: AdamW
+lr0: 0.00016
+lrf: 0.02
+weight_decay: 0.0005
+warmup_epochs: 2.0
+cos_lr: true
+close_mosaic: 12
+mosaic: 0.6
+mixup: 0.04
+copy_paste: 0.03
+scale: 0.4
+translate: 0.07
+fliplr: 0.5
+flipud: 0.0
+hsv_h: 0.005
+hsv_s: 0.14
+hsv_v: 0.14
+multi_scale: false
+patience: 25
+save_period: 5
+val: true
+plots: true
+amp: true
