@@ -4,6 +4,66 @@
 
 ---
 
+## v0.18.0 (experiment) — 干净少数类重采样 rareos + per-class 阈值扫描工具 + rareos 提交
+
+**日期:** 2026-09-05
+**类型:** 数据类别平衡 / 推理后处理工具 / 提交产物 / 迁移到单卡 5090
+**背景:** v0.17.0 soft-fusion 在新标签上 best mAP50-95=0.47325（平台分 50.5050），三模态弱注入路线收益收敛。分析训练/提交类别分布发现极端不平衡是 mAP@50-95（对 12 类等权）的主要拖累：boat 仅 135 框、ball 95、tricycle 27（fold1 train），模型提交里 tricycle 只出 22 框几乎靠猜。本轮放弃 v0.13 曾翻车的「伪标签 + uav/10x 过采样」，改为只对三个真正稀缺类（boat/ball/tricycle）做干净图级硬链接重采样，规避测试集污染并保持 person/car 先验几乎不变。同时在 GPU 服务器（单卡 RTX 5090）跑完 gated 与 rareos 两路训练，生成 rareos 提交供平台 A/B。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `tools/oversample_rare_clean.py` | 新增 | 干净图级重采样：仅 boat(1)/ball(7)/tricycle(11)，`--mult` 指定倍数，硬链接实现零额外磁盘；guard 打印 person/car 倍数确认先验不变；不含伪标签、不动 data/test |
+| `configs/yolo_native_m_trimodal_rareos_labelrefresh.yaml` | 新增 | 从平台最佳 SAR YOLO11m 权重微调重采样数据，run 名 `rareos768_labelrefresh_from_sar_best`，超参与 soft_labelrefresh 对齐（imgsz768/batch8/AdamW/lr0.00016/close_mosaic12） |
+| `tools/scan_conf_per_class.py` | 新增→重写 | per-class 置信度扫描。先重写为「前缀精确法」：贪心按分数降序，去掉低分尾不影响前缀 TP/FP，故每类每 IoU 只匹配一次、任意阈值 O(1) 取前缀；GPU 仅一次前向缓存 `.npz`。修复两 bug：①逐图用自身 orig_shape 换算 GT（数据集为 27 张 640×360 + 373 张 1920×1080，混用第一张尺寸会让小图 GT 全错位）；②缓存为相对路径时 dirname 为空的 makedirs 崩溃。输出每类最优 conf 与 delta，可 `--out-json` 写盘供推理复用 |
+| `tools/infer_ultra_tiled.py` | 修改 | 新增 `--perclass-conf JSON`：在融合 NMS 后按类砍低于阈值框，供 per-class 提交复用 |
+| `scripts_5090/run_submission_ab.sh` | 新增 | 一键产出两个 A/B 提交：ab00_baseline（全局 conf=0.001）+ ab01_perclass（按类阈值）。注：此脚本按 8 卡并行编写，本机单卡请按序运行步骤 |
+
+### 数据准备（CPU 硬链接，零额外磁盘）
+
+```bash
+python tools/oversample_rare_clean.py \
+  --src data/yolo_trimodal_soft_m \
+  --dst data/yolo_trimodal_soft_m_rareos \
+  --mult 1:2,7:2,11:4
+# train 1600 → 1772（+172 dup）；tricycle 25→100(4x)、boat 107→214(2x)、ball 72→150(2x)
+# person 仅连带 1.14x、car 1.09x（guard 确认先验未大变）；val 400 原样
+```
+
+### 训练（GPU 服务器 32709，单卡 RTX 5090；与 gated 同机并行跑完）
+
+| run | 结果 | 说明 |
+|-----|------|------|
+| `gated768_labelrefresh_from_sar_best` | 80/80，best ep66，mAP50=0.75492 / **mAP50-95=0.47372** | 局部 gate 注入，≈ soft_labelrefresh 基线，无明显增益 |
+| `rareos768_labelrefresh_from_sar_best` | early-stop @62，best ep37，mAP50=0.76264 / **mAP50-95=0.48505** | ✅ 反超平台最佳 soft_labelrefresh（0.47325）+0.012，当前本地最佳 |
+
+### 提交产物（rareos best.pt，fold1 val TTA 评估 mAP50-95=0.4974）
+
+- `submission_rareos768_labelrefresh_ab00_baseline.zip`：conf=0.001，1000 txt，25571 框，主推候选
+- `submission_rareos768_labelrefresh_ab01_perclass.zip`：per-class 阈值版，与 baseline 同框（扫描结论见下）
+- 类别分布对比旧 full_tta：boat 123→187、tricycle 22→59，重采样稀缺类检出明显增多
+
+### per-class 阈值扫描结论
+
+- 全部 12 类最优 conf 均为 **0.001**：该已充分训练的模型提高阈值只伤 recall、不增 precision，故 **conf=0.001 baseline 即最优**，per-class 版无增益（后续无需再试阈值方向）。
+- 附：per-class AP（val，TTA，conf=0.001）person 0.431/boat 0.407/animal 0.508/seat 0.600/sign 0.365/bicycle 0.402/car 0.522/ball 0.369/light 0.488/garbage 0.542/uav 0.583/tricycle 0.752，无类别塌缩。
+
+### 磁盘清理（迁移新实例时，数据盘 6.1G → 21G）
+
+- 删除 5 个 run 目录下全部 `epoch*.pt`（中间断点，保留 best/last）：native_x_sar/rgb_sar768-2、-3，native_m_trimodal/{soft_labelrefresh, fusion, soft}_from_sar_best
+- 删除废弃 fusion 数据 `data/yolo_trimodal_fusion_m` + `data/test_trimodal_fusion`（v0.16.0 真三模态 0.439 已废弃，可再生成）
+
+### 状态
+
+- [x] 数据准备：`data/yolo_trimodal_soft_m_rareos` 1772 图，check_det_dataset 通过。
+- [x] gated 训练完成（0.47372）与 rareos 训练完成（0.48505）。
+- [x] rareos 提交 ab00_baseline / ab01_perclass 已生成（zip 不入库，位于仓库根目录）。
+- [x] 工具脚本（oversample / scan_conf / infer perclass / submission builder）已提交并 push。
+- [ ] ab00_baseline.zip 平台 A/B 结果待队长回报（期望 ~51+ 验证重采样路线）。
+
+---
+
 ## v0.17.1 (experiment) — DEYOLO/GLS 启发的 gated 三模态局部增强
 
 **日期:** 2026-09-02
