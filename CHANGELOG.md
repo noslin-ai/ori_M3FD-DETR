@@ -4,6 +4,30 @@
 
 ---
 
+## v0.18.8 (experiment) — 方向1 full1950 + conf 扫描提交
+
+**日期:** 2026-09-06
+**类型:** 训练 / 提交产物
+**背景:** 方向 1 最大化数据利用率（train 1950 = 全量 2000 减 50 监控 val），从 full2000cont best 起步，1024 充分训练（patience=999，90 轮）。同时因 conf=0.003 平台 52.063 证实提交侧阈值是强杠杆，给 full1950 配不同 conf 出提交。
+
+### 训练
+
+- run `full1950_soft1024-2`：90/90 跑满，best ep2（50-val mAP50-95=0.771，但 50-val 噪声大不可靠）。数据利用率较 full2000cont 多 150 张（1950 vs 1800）。
+
+### 提交产物（full1950 best.pt，imgsz=1024，full TTA）
+
+| 提交 | conf | 框数 |
+|---|---|---|
+| submission_full1950_conf0.003.zip | 0.003 | 22087 |
+| submission_full1950_conf0.005.zip | 0.005 | 17426 |
+| submission_full1950_conf0.01.zip | 0.01 | 13178 |
+
+### 待平台 A/B
+
+- full1950 conf 系列 vs full2000cont conf 系列（同为 conf 调优，看全量数据 +0 是否在 conf 调优下也有增益）。
+
+---
+
 ## v0.18.7 (result) — 平台里程碑：conf=0.003 提交 = 52.0630 新最佳
 
 **日期:** 2026-09-06
