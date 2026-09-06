@@ -1,0 +1,52 @@
+# YOLO11m full-data gated tri-modal 1024 training.
+#
+# This combines the validated full-data/1024/no-early-stop direction from
+# full2000cont with the DEYOLO/GLS-inspired gated tri-modal enhancement.
+#
+# Prepare first:
+#
+#   python tools/prepare_yolo_full_holdout_data.py \
+#     --out data/yolo_full2000_gated \
+#     --test-out data/test_full2000_gated \
+#     --val-count 200 \
+#     --fusion-mode gated \
+#     --ir-weight 0.18 \
+#     --depth-weight 0.10 \
+#     --sharpen 0.24 \
+#     --overwrite
+
+model: runs/detect/runs/native_m_trimodal/soft768_labelrefresh_from_sar_best/weights/best.pt
+data: data/yolo_full2000_gated/data.yaml
+epochs: 90
+imgsz: 1024
+batch: 16
+device: 0
+workers: 10
+seed: 42
+project: runs/native_m_trimodal
+name: full2000_gated1024_from_soft768
+exist_ok: false
+pretrained: true
+optimizer: AdamW
+lr0: 0.00012
+lrf: 0.02
+weight_decay: 0.0005
+warmup_epochs: 2.0
+cos_lr: true
+close_mosaic: 15
+mosaic: 0.45
+mixup: 0.03
+copy_paste: 0.02
+scale: 0.35
+translate: 0.06
+fliplr: 0.5
+flipud: 0.0
+hsv_h: 0.004
+hsv_s: 0.10
+hsv_v: 0.10
+multi_scale: false
+patience: 999
+save_period: 10
+val: true
+plots: true
+amp: true

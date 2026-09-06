@@ -4,6 +4,42 @@
 
 ---
 
+## v0.19.4 (experiment) — full2000 gated 三模态 1024：把论文增强迁移到当前最佳数据路线
+
+**日期:** 2026-09-06
+**类型:** 数据融合 / 训练配置 / 当前最佳路线延展
+**背景:** 队长最新平台结果显示：`full2000cont + 1024 + 充分训练 + conf=0.01` 已达 52.9330，且 rare-class oversampling 已被证伪。下一步不再重复重采样，而是把 DEYOLO/GLS/多模态茶芽检测的“局部跨模态增强”迁移到当前已验证有效的 full2000 路线：全量 2000 中留出 200 监控、训练 1800，使用 gated IR 局部显著残差 + depth 边缘 gate，1024 分辨率，不早停。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|------|------|------|
+| `tools/prepare_yolo_full_holdout_data.py` | 新增 | 从 `data/train` 全量 2000 标签构建 1800/200 deterministic holdout，并生成 soft/gated 三模态 YOLO 数据与对应 test 图 |
+| `configs/yolo_native_m_trimodal_full2000_gated1024.yaml` | 新增 | 从 `soft768_labelrefresh` best.pt 出发，训练 full2000 gated 1024，`patience=999` 避免 early-stop 误导 |
+
+### 推荐运行
+
+```bash
+python tools/prepare_yolo_full_holdout_data.py \
+  --out data/yolo_full2000_gated \
+  --test-out data/test_full2000_gated \
+  --val-count 200 \
+  --fusion-mode gated \
+  --ir-weight 0.18 \
+  --depth-weight 0.10 \
+  --sharpen 0.24 \
+  --overwrite
+screen -dmS yolo_m_full2000_gated1024_v0194 bash -lc 'source /root/miniconda3/etc/profile.d/conda.sh && conda activate race && OMP_NUM_THREADS=8 yolo detect train cfg=configs/yolo_native_m_trimodal_full2000_gated1024.yaml > yolo_m_full2000_gated1024_v0194_train.log 2>&1'
+```
+
+### 状态
+
+- [x] 代码、配置与本记录已准备，等待 push 后在服务器生成 full2000 gated 数据并训练。
+- [ ] 生成 `data/yolo_full2000_gated` 与 `data/test_full2000_gated`。
+- [ ] 训练完成后使用 full-image TTA + conf 扫描生成提交包，优先对比 full2000cont conf=0.01 平台 52.9330。
+
+---
+
 ## v0.19.3 (experiment) — per-class conf 方案（Box-Size-Bias 论文落地）
 
 **日期:** 2026-09-06
