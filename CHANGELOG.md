@@ -4,6 +4,38 @@
 
 ---
 
+## v0.19.3 (experiment) — per-class conf 方案（Box-Size-Bias 论文落地）
+
+**日期:** 2026-09-06
+**类型:** 提交侧 / 类别条件阈值
+**背景:** 全局 conf 单调升到 0.01(52.93)仍涨。受 Box Size Confidence Bias(WACV'23)启发——检测器置信度有类别/尺寸偏置，全局单阈值非最优。设计 per-class conf：FP 多的大类(person/animal/light)用高 conf，稀缺/小目标(boat/ball/tricycle/uav)用低 conf 保召回。
+
+### per-class 方案（基于 full2000cont 模型，conf=0.001 抓全 + json 精砍）
+
+| 方案 | 大类(0,2,3,4,5,6,8,9) | 稀缺(1,7,10,11) | 说明 |
+|---|---|---|---|
+| P1 | 0.02 | 0.005 | 温和：大类略压 |
+| P2 | 0.03 | 0.003 | 激进：大类大压 |
+| P3 | 0.01 | 0.003 | 大类保持 conf0.01，只降稀缺 |
+
+### 提交产物（box 分布验证设计生效）
+
+| 提交 | person | boat | ball | uav | tricycle |
+|---|---|---|---|---|---|
+| conf0.01(52.93 基线) | 3119 | 54 | 63 | 330 | 14 |
+| submission_f2000cont_P1.zip | 2553 | 74 | 92 | 398 | 15 |
+| submission_f2000cont_P2.zip | 2304 | 90 | 118 | 488 | 16 |
+| submission_f2000cont_P3.zip | 3119 | 90 | 118 | 488 | 16 |
+
+P2/P3 让 boat/ball/uav/tricycle 保留更多(稀缺召回保住)，大类被压(FP 减少)。
+
+### 状态
+
+- [x] 3 个 perclass 提交已生成。
+- [ ] 待平台 A/B（与全局 conf0.01 对比，验证"分类别阈值是否优于全局"）。
+
+---
+
 ## v0.19.2 (experiment) — 高 conf 候选生成（探平台峰值）
 
 **日期:** 2026-09-06
