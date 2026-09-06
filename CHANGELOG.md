@@ -4,6 +4,56 @@
 
 ---
 
+## v0.20.4 (chore) — 数据盘 + 系统盘清理,释放 ~31G
+
+**日期:** 2026-09-06
+**类型:** 磁盘清理 / 实验回滚
+**背景:** 新服务器(22291)两块盘接近满载:数据盘 `/root/autodl-tmp` 41G/50G(82%)、系统盘 `/` 27G/30G(89%)。清理与当前最佳方案无关的历史产物。清理全程无训练/推理进程占用,已逐项核对依赖,不影响当前最佳 = `full2000_soft1024_cont_noearly/best.pt + conf0.7 提交(56.6270)`。
+
+### 当前最佳方案依赖链(全程保留,未动)
+
+- `runs/detect/runs/native_m_trimodal/full2000_soft1024_cont_noearly/weights/best.pt`(39M)
+- `data/test_trimodal_soft/`(1000 张推理输入图)
+- `submission_f2000cont_conf0.7.zip`(当前最佳提交)
+- `data/yolo_full2000_soft/`(最佳训练数据)+ 原始 `data/train`(13G)/`data/test`(5.7G)
+- miniconda3 `race` env(torch 2.13.0 / ultralytics 8.4.131,推理主环境)
+- 保留 run:`full2000_soft1024_cont_noearly`、其前身 `full2000_soft1024`、候选 `full2000cont_1280_refine`
+
+### 数据盘 `/root/autodl-tmp` 清理(41G → 23G,释放 ~18G)
+
+| 类别 | 内容 | 释放 |
+|---|---|---|
+| 71 个 epoch 中间权重快照 | runs/ 各处 epoch*.pt(154M/个),推理只依赖 best.pt | ~10.7G |
+| 15 个废弃 run 目录 | native_x_sar/m_sar、cv_scratch、fusion/gated/rareos/soft768/soft1024 早期、full1950_soft1024(-2)、trimodal_s/full/debug(老架构/被平台证伪/非主推) | ~4.5G |
+| 8 套废弃 data 变体 | yolo_trimodal_soft_m(+_rareos)/gated_m、yolo_sar_m、yolo_full2000_rareos_soft、yolo_2000soft_1950train、soft_cv、test_trimodal_gated(各1.7G,只被已删废弃 run 引用) | ~8.5G |
+
+### 系统盘 `/` 清理(27G → 15G,释放 ~12G)
+
+| 类别 | 内容 | 释放 |
+|---|---|---|
+| pip 下载缓存 | `/root/.cache/pip` | 8.2G |
+| /tmp 残留 | pip-unpack-*(中断安装)、latest.pth(老 DETR 路线)、pytest-of-root、torchinductor_root、*.log | ~3.7G |
+| conda pkgs 缓存 | `conda clean -a`(仅活动包外缓存 3.2M) | ~0 |
+
+### 保留(未删,保守)
+
+- `/root/.cache/huggingface/hub`(861M,可能含队友/其他模型,不确定归属)
+- miniconda3 `cityvimd` env(5.7G,含 torch+ultralytics,不确定是否被队友使用,保守保留)
+- `data/val_fold2_soft`、`data/yolo_m`、`data/yolo_x`
+
+### 结果
+
+- 数据盘 `/root/autodl-tmp`:41G → **23G**(可用 9G → 28G)
+- 系统盘 `/`:27G → **15G**(89% → 49%,可用 3.5G → 16G)
+- race env 完整性核验通过:torch 2.13.0+cu130 / ultralytics 8.4.131 正常 import。
+
+### 状态
+
+- [x] 双盘清理完成,当前最佳方案依赖链完整。
+- [x] 清理产物均非 git 管理(权重/data 不入 git),不影响仓库。
+
+---
+
 ## v0.20.3 (result/experiment) — conf0.7=56.627 峰值现 + conf0.8 断崖回落,0.6~0.75 细定位候选就绪
 
 **日期:** 2026-09-06
