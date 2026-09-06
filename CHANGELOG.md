@@ -38,13 +38,16 @@
 ### 保留(未删,保守)
 
 - `/root/.cache/huggingface/hub`(861M,可能含队友/其他模型,不确定归属)
-- miniconda3 `cityvimd` env(5.7G,含 torch+ultralytics,不确定是否被队友使用,保守保留)
 - `data/val_fold2_soft`、`data/yolo_m`、`data/yolo_x`
+
+### 追加(用户确认)
+
+- 删除 miniconda3 `cityvimd` env(5.7G):之前其他尝试(CityViMD 路线),已证实行不通。`race` env 仍为主推理环境,删除后核验通过。
 
 ### 结果
 
 - 数据盘 `/root/autodl-tmp`:41G → **23G**(可用 9G → 28G)
-- 系统盘 `/`:27G → **15G**(89% → 49%,可用 3.5G → 16G)
+- 系统盘 `/`:27G → **9G**(89% → 30%,可用 3.5G → 22G)(追加:删除已证实行不通的 miniconda3 `cityvimd` env 5.7G)
 - race env 完整性核验通过:torch 2.13.0+cu130 / ultralytics 8.4.131 正常 import。
 
 ### 状态
