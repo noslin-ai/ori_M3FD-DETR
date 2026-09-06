@@ -4,6 +4,27 @@
 
 ---
 
+## v0.19.5 (chore) — 清理非最佳产物释放数据盘空间
+
+**日期:** 2026-09-06
+**类型:** 磁盘清理 / 实验回滚
+**背景:** 用户确认当前最佳提交为 `submission_f2000cont_conf0.01.zip`。新服务器数据盘接近满载（`/root/autodl-tmp` 94%，仅约 3.2G 可用），因此清理与最佳成绩无关的旧提交、旧实验数据和中间权重。该服务器上未找到 `submission_f2000cont_conf0.01.zip`，所以没有最佳包可删除或移动。
+
+### 清理内容
+
+- 停止并删除刚启动的非最佳实验 `full2000_gated1024_from_soft768`，避免继续写 checkpoint。
+- 删除旧 `submission*` 目录/zip，排除规则保留 `submission_f2000cont_conf0.01.zip`。
+- 删除非最佳派生数据：`data/yolo_full2000_gated`、`data/test_full2000_gated`、`data/yolo_trimodal_gated_m`、`data/test_trimodal_gated`、`data/yolo_trimodal_soft_m_rareos`、`data/yolo_trimodal_fusion_m`、`data/test_trimodal_fusion`、`data/test_trimodal_soft`。
+- 删除 transient `.pid` / `.part` 文件与旧 run 的 `epoch*.pt` 中间权重，并移除非最佳旧 run 目录。
+
+### 结果
+
+- 数据盘 `/root/autodl-tmp`：94% -> 47%，可用空间约 3.2G -> 27G。
+- 当前无运行中的 screen 训练。
+- v0.19.4 `full2000_gated1024` 仅短跑到第 11 轮即因清盘中止，短跑 200-val best 约 mAP50-95=0.63326，不作为有效平台结论。
+
+---
+
 ## v0.19.4 (experiment) — full2000 gated 三模态 1024：把论文增强迁移到当前最佳数据路线
 
 **日期:** 2026-09-06
@@ -37,7 +58,7 @@ screen -dmS yolo_m_full2000_gated1024_v0194 bash -lc 'source /root/miniconda3/et
 - [x] 代码、配置与本记录已准备并已 push：commit `07626af`。
 - [x] 服务器已生成 `data/yolo_full2000_gated` 与 `data/test_full2000_gated`：train=1800、val=200、test=1000。
 - [x] 训练已启动：screen `yolo_m_full2000_gated1024_v0194`，日志 `yolo_m_full2000_gated1024_v0194_train.log`，run `runs/native_m_trimodal/full2000_gated1024_from_soft768`。
-- [ ] 训练完成后使用 full-image TTA + conf 扫描生成提交包，优先对比 full2000cont conf=0.01 平台 52.9330。
+- [x] 因数据盘接近满载且用户确认当前最佳为 `submission_f2000cont_conf0.01.zip`，本实验已在第 11 轮后停止并清理产物；不生成提交包。
 
 ---
 
