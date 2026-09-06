@@ -111,6 +111,41 @@ screen -dmS yolo_m_full2000_gated1024_v0194 bash -lc 'source /root/miniconda3/et
 
 ---
 
+## v0.19.4 (result) — per-class P2 平台 53.5550：分类别阈值大幅优于全局
+
+**日期:** 2026-09-06
+**类型:** 平台结果 / 类别条件阈值突破
+**背景:** per-class 方案 P2（大类 0.03、稀缺类 0.003）提交 `submission_f2000cont_P2.zip` 平台 **53.5550**，超越全局 conf0.01（52.9330）达 **+0.62**，大幅刷新最佳。
+
+### 平台实测对比
+
+| 方案 | conf 策略 | 平台分 | Δ vs 全局0.01 |
+|---|---|---|---|
+| 全局 conf0.005 | 全类 0.005 | 52.5010 | — |
+| 全局 conf0.01 | 全类 0.01 | 52.9330 | — |
+| **per-class P2** | 大类0.03/稀缺0.003 | **53.5550** | **+0.62** |
+
+### 关键结论（Box-Size-Bias 论文证实）
+
+1. **分类别阈值大幅优于全局单阈值**。P2 让 FP 多的大类(person/animal/light/sign/car)用高 conf 0.03 砍 FP，同时稀缺类(boat/ball/uav/tricycle)用低 conf 0.003 保召回。
+2. **稀缺类召回是宝贵分数来源**：P2 里 boat/ball/uav 保留远多于全局 conf0.01(boat 90 vs 54、ball 118 vs 63、uav 488 vs 330)，这些稀缺目标贡献了真实 AP。
+3. 全局 conf 压缩主要在"砍大类 FP"，但无差别砍会连带伤稀缺 recall；per-class 解耦了两者。
+
+### 下一步
+
+- P2(大类0.03/稀缺0.003)已强，可继续探索更优组合：
+  - 大类 conf 更高？(0.04/0.05)
+  - 稀缺类更低或各类分开设
+  - seat/sign/bicycle/garbage 等中类单独定
+- 需警惕过度调参过拟合平台。
+
+### 状态
+
+- [x] per-class P2 = 53.5550 平台最佳。
+- [ ] 探索更优 per-class 组合定位峰值。
+
+---
+
 ## v0.19.3 (experiment) — per-class conf 方案（Box-Size-Bias 论文落地）
 
 **日期:** 2026-09-06
