@@ -4,6 +4,39 @@
 
 ---
 
+## v0.19.6 (experiment) — full2000cont 1280 低学习率定位精修
+
+**日期:** 2026-09-06
+**类型:** 当前最佳模型续训 / 小目标高分辨率精修
+**背景:** 当前平台最佳为 `submission_f2000cont_conf0.01.zip`（52.9330），对应 `full2000cont best.pt + imgsz=1024 + full TTA + conf=0.01`。最新标签服务器保留 2000 份标签和完整最佳权重。已有实验已证明整图稀有类重采样会改变类别先验并掉分，fold1/200-val 又不能可靠预测平台，因此本轮保持 full2000 的数据、soft 三模态输入、类别先验和 YOLO11m 拓扑不变，仅测试高分辨率弱增强精修。
+
+### 论文启发与受控变量
+
+- CVPR 2025 `SET: Spectral Enhancement for Tiny Object Detection` 指出 tiny-object 表征容易在编码中被背景频率成分淹没；ICCV 2025 `DM-EFS` 与 NeurIPS 2024 `PIIP` 均强调高分辨率/多尺度表征对小目标的重要性。
+- 本轮不直接引入新融合模块，避免破坏已训练好的三模态特征和预训练权重映射；先用 `1024 -> 1280` 增加小目标有效像素。
+- 从平台最佳 `full2000_soft1024_cont_noearly/weights/best.pt` 起步，AdamW `lr0=4e-5`，36 轮跑满，`patience=999`。
+- 关闭 mosaic/mixup/copy-paste，并把尺度、平移和 HSV 扰动降到较弱水平，集中修正定位与置信度，不再改变类别采样先验。
+
+### 修改概览
+
+| 文件 | 类型 | 摘要 |
+|---|---|---|
+| `configs/yolo_native_m_trimodal_full2000cont_1280_refine.yaml` | 新增 | full2000cont best 的 1280、低学习率、弱增强精修配置；batch=8，save_period=6 |
+
+### 训练与判定
+
+- 训练 run：`runs/detect/runs/native_m_trimodal/full2000cont_1280_refine`。
+- 训练后必须按当前最佳相同推理口径生成 `imgsz=1280 + full TTA + conf=0.01` 提交包，再与 52.9330 做平台 A/B。
+- 本地 200-val 只用于排查训练崩溃，不据此提前停止或宣称提分。
+
+### 状态
+
+- [x] 配置与记录随本版本 push 到 GitHub。
+- [ ] 服务器拉取后启动训练。
+- [ ] 训练完成并生成同口径提交包。
+
+---
+
 ## v0.19.5 (chore) — 清理非最佳产物释放数据盘空间
 
 **日期:** 2026-09-06
