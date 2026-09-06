@@ -34,8 +34,8 @@ screen -dmS yolo_m_full2000_gated1024_v0194 bash -lc 'source /root/miniconda3/et
 
 ### 状态
 
-- [x] 代码、配置与本记录已准备，等待 push 后在服务器生成 full2000 gated 数据并训练。
-- [ ] 生成 `data/yolo_full2000_gated` 与 `data/test_full2000_gated`。
+- [x] 代码、配置与本记录已准备并已 push：commit `07626af`。
+- [x] 服务器已生成 `data/yolo_full2000_gated` 与 `data/test_full2000_gated`：train=1800、val=200、test=1000。
 - [ ] 训练完成后使用 full-image TTA + conf 扫描生成提交包，优先对比 full2000cont conf=0.01 平台 52.9330。
 
 ---
