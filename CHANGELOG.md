@@ -4,6 +4,51 @@
 
 ---
 
+## v0.20.7 (experiment) — 方向B 启动:YOLO11x + soft三模态 full2000 域适配训练
+
+**日期:** 2026-09-07
+**类型:** 训练 / 模型规模升级
+**背景:** conf0.65=56.7270(1024模型)确认提交侧天花板后,方向 A 微定位仍在测;方向 B 转向**用更大模型 YOLO11x(57M,vs m 的 20M)替换 YOLO11m**,复用已验证最优的 soft 三模态 full2000 数据与完整管道。
+
+### 平台补充实测(方向A/1280refine,更新)
+
+- 1024 模型:conf0.63=**56.6780**、conf0.68=**56.6660**(均 < conf0.65 的 56.7270,1024 峰值仍锁 0.65)
+- 1280refine:conf0.6=**56.4940**、conf0.7=**55.6990**(峰谷均低于 1024 → 1280refine 确证不强于 1024,排除其作为方向B基线)
+- conf0.66 未测(方向A收尾可补)
+
+### 为什么 X + 为什么这样训
+
+- m 拿 56.727 靠**链式域适配**(COCO→768 域适配→1024→全量→无早停续训),不是 COCO 直接冷启。
+- m 的中间权重已删、m→x 拓扑不兼容 → **x 只能从 COCO yolo11x.pt(本地 114M,已备)冷启**。
+- 采用最贴近 m 成功路径的两段式:**[1] full2000@768 域适配(36轮)→ [2] full2000@1024 无早停续训**。
+- soft 三模态数据(1800/200)是**数据准备期融合成的标准 3ch 图**,YOLO 直接消费,X 只需改 model 规模,**无需改多模态 head/数据/推理管道**(全部复用)。
+
+### 训练配置
+
+- 新增 `configs/yolo_native_x_trimodal_full2000_soft768.yaml`(已 push)
+- stage1:yolo11x.pt → full2000@768,bs12,lr0.0004,36轮,patience=0(不早停),save_period=6
+- run:`runs/native_x_trimodal/full2000_soft768_adapt`
+- 显存 16.6G(32G卡充裕),loss 健康下降(box 1.84→1.58, cls 2.90→1.32),ep1 200-val mAP50-95=0.216(冷启起步正常),~30s/epoch,GPU 94%
+
+### stage2(待 stage1 完成后)
+
+- `full2000@1024` 从 stage1 best 续训,无早停,低 LR——配置届时按 m 的 cont 配方再建。
+
+### 状态
+
+- [x] 方向B stage1(X@768 域适配)训练启动并健康运行。
+- [ ] stage1 完成 → 建 stage2(X@1024 续训)配置并启动。
+- [ ] stage2 完成后 → 按 1024 模型同口径(imgsz+fullTTA)做 conf 扫描,定位 X 峰值,对比 56.7270。
+- [ ] 方向A:conf0.66 未测(收尾可补)。
+
+### 保留/不可删(方向B 依赖)
+
+- `yolo11x.pt`(114M,服务器根目录)
+- `data/yolo_full2000_soft`(1800/200 soft 训练数据)
+- `configs/yolo_native_x_trimodal_full2000_soft768.yaml`
+
+---
+
 ## v0.20.6 (experiment) — 方向A 微定位候选 + 方向B 重新评估:1280refine 需完整 conf 扫描
 
 **日期:** 2026-09-07
