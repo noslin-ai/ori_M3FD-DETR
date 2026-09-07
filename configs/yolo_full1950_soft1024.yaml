@@ -1,0 +1,46 @@
+# YOLO11m direction-1: maximize data utilization — train on ~all 2000 images.
+#
+# full2000cont (1800 train, 51.322) proved "more data + 1024 + long training" wins.
+# Direction 1 pushes data to 1950 train (only 50 kept as a tiny monitor val, NOT used
+# for selection). Init from full2000cont best (51.322). No early stop (val too small
+# & unreliable): high patience, save periodically, pick by platform A/B.
+#
+# Data: data/yolo_2000soft_1950train  (1950 train / 50 monitor val, symlinks)
+#   find data/yolo_2000soft_1950train -name "*.cache" -delete
+
+model: runs/detect/runs/native_m_trimodal/full2000_soft1024_cont_noearly/weights/best.pt
+data: data/yolo_2000soft_1950train/data.yaml
+epochs: 90
+imgsz: 1024
+batch: 16
+device: 0
+workers: 16
+seed: 42
+project: runs/native_m_trimodal
+name: full1950_soft1024
+exist_ok: false
+pretrained: true
+optimizer: AdamW
+lr0: 0.0001
+lrf: 0.01
+weight_decay: 0.0005
+warmup_epochs: 2.0
+cos_lr: true
+close_mosaic: 10
+mosaic: 0.6
+mixup: 0.06
+copy_paste: 0.05
+scale: 0.5
+translate: 0.08
+fliplr: 0.5
+flipud: 0.0
+hsv_h: 0.006
+hsv_s: 0.16
+hsv_v: 0.15
+multi_scale: false
+patience: 999
+save_period: 10
+val: true
+plots: true
+amp: true
+cache: ram

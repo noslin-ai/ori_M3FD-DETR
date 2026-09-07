@@ -1,0 +1,49 @@
+# YOLO11x FULL-2000 SOFT domain adaptation at 768.
+#
+# Path to 56.727 (m-model): COCO -> 768 domain adapt -> 1024 -> full-2000 ->
+# no-early-stop continue. m's intermediate weights are deleted and x topology
+# differs from m, so x MUST cold-start from COCO yolo11x.pt. This first stage
+# adapts x to the soft 3-modal fused domain + 12 classes at low res (768),
+# following m's proven "adapt at low res, then up-res" recipe.
+#
+# Data: data/yolo_full2000_soft (1800 train / 200 val, soft-fused 3ch, labels refreshed)
+#   This is the SAME best-proven dataset m used (no oversampling).
+#
+# Run: yolo detect train cfg=configs/yolo_native_x_trimodal_full2000_soft768.yaml
+
+model: yolo11x.pt
+data: data/yolo_full2000_soft/data.yaml
+epochs: 36
+imgsz: 768
+batch: 12
+device: 0
+workers: 32
+seed: 42
+project: runs/native_x_trimodal
+name: full2000_soft768_adapt
+exist_ok: false
+pretrained: true
+optimizer: AdamW
+lr0: 0.0004
+lrf: 0.01
+weight_decay: 0.0005
+warmup_epochs: 3.0
+cos_lr: true
+close_mosaic: 10
+mosaic: 1.0
+mixup: 0.12
+copy_paste: 0.08
+scale: 0.5
+translate: 0.1
+fliplr: 0.5
+flipud: 0.0
+hsv_h: 0.006
+hsv_s: 0.16
+hsv_v: 0.15
+multi_scale: false
+patience: 0
+save_period: 6
+val: true
+plots: true
+amp: true
+cache: ram

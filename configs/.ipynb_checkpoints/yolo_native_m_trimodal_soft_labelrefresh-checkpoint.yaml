@@ -1,0 +1,50 @@
+# YOLO11m tri-modal soft-fusion fine-tune after the 2026-09-02 label refresh.
+#
+# The source labels under data/train/labels were overwritten by the captain on
+# 2026-09-02. The YOLO train/val label folders are symlinks into that directory,
+# so the important pre-flight step is deleting stale Ultralytics labels.cache
+# files before training.
+#
+# Recommended pre-flight:
+#
+#   find data/yolo_sar_m data/yolo_trimodal_soft_m -name "*.cache" -delete
+#
+# This run restarts from the earlier platform-best SAR-style YOLO11m weight
+# rather than the old soft-fusion last.pt, because the previous soft run was
+# trained and early-stopped against stale/wrong labels.
+
+model: runs/detect/runs/native_m_sar/rgb_sar768-2/weights/best.pt
+data: data/yolo_trimodal_soft_m/data.yaml
+epochs: 80
+imgsz: 768
+batch: 8
+device: 0
+workers: 8
+seed: 42
+project: runs/native_m_trimodal
+name: soft768_labelrefresh_from_sar_best
+exist_ok: false
+pretrained: true
+optimizer: AdamW
+lr0: 0.00016
+lrf: 0.02
+weight_decay: 0.0005
+warmup_epochs: 2.0
+cos_lr: true
+close_mosaic: 12
+mosaic: 0.6
+mixup: 0.04
+copy_paste: 0.03
+scale: 0.4
+translate: 0.07
+fliplr: 0.5
+flipud: 0.0
+hsv_h: 0.005
+hsv_s: 0.14
+hsv_v: 0.14
+multi_scale: false
+patience: 25
+save_period: 5
+val: true
+plots: true
+amp: true

@@ -1,0 +1,41 @@
+# STRICT clean CV fold1: train on folds 2-5 (1600), val fold1 (400), FROM SCRATCH
+# from pure ImageNet yolo11m.pt (has never seen any city data -> fold1_val is truly
+# clean held-out). Goal: pilot 1 fold to measure wall-time + converged score before
+# launching all 5 folds.
+
+model: yolo11m.pt
+data: data/soft_cv/fold1/data.yaml
+epochs: 120
+imgsz: 768
+batch: 32
+device: 0
+workers: 16
+seed: 42
+project: runs/cv_scratch
+name: cv_scratch_fold1
+exist_ok: false
+pretrained: true
+optimizer: AdamW
+lr0: 0.001
+lrf: 0.01
+weight_decay: 0.0005
+warmup_epochs: 3.0
+cos_lr: true
+close_mosaic: 10
+mosaic: 1.0
+mixup: 0.1
+copy_paste: 0.1
+scale: 0.5
+translate: 0.1
+fliplr: 0.5
+flipud: 0.0
+hsv_h: 0.015
+hsv_s: 0.7
+hsv_v: 0.4
+multi_scale: false
+patience: 40
+save_period: 10
+val: true
+plots: true
+amp: true
+cache: ram

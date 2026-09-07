@@ -1,0 +1,50 @@
+# YOLO11m FULL-2000 + rare-class oversampling + 1024.
+#
+# Strategy synthesis of what actually won:
+#   - full2000cont (full-2000 data, no early-stop continuation, 1024) -> platform 51.322 (BEST)
+#   - rare-class oversampling previously failed ONLY because it was on fold1's 1600
+#     (data-starved); on full 1800 the person/animal prior amplification is diluted.
+# So: take the full-2000 + 1024 winner and ADD rare-class oversampling on top to
+# recover boat/ball/tricycle, which the 12-class-equal mAP heavily penalizes.
+#
+# Data: data/yolo_full2000_rareos_soft  (train 1972 incl rare dups / val 200)
+# Init: full2000cont best (platform 51.322).
+# No early stopping (proven misleading): patience high, rely on long training.
+#   find data/yolo_full2000_rareos_soft -name "*.cache" -delete
+
+model: runs/detect/runs/native_m_trimodal/full2000_soft1024_cont_noearly/weights/best.pt
+data: data/yolo_full2000_rareos_soft/data.yaml
+epochs: 80
+imgsz: 1024
+batch: 16
+device: 0
+workers: 16
+seed: 42
+project: runs/native_m_trimodal
+name: full2000rareos_soft1024
+exist_ok: false
+pretrained: true
+optimizer: AdamW
+lr0: 0.0001
+lrf: 0.01
+weight_decay: 0.0005
+warmup_epochs: 2.0
+cos_lr: true
+close_mosaic: 10
+mosaic: 0.6
+mixup: 0.06
+copy_paste: 0.05
+scale: 0.5
+translate: 0.08
+fliplr: 0.5
+flipud: 0.0
+hsv_h: 0.006
+hsv_s: 0.16
+hsv_v: 0.15
+multi_scale: false
+patience: 999
+save_period: 10
+val: true
+plots: true
+amp: true
+cache: ram

@@ -1,0 +1,54 @@
+# YOLO11m clean 1024 resolution fine-tune on SOFT-FUSION data (after label refresh).
+#
+# Rationale: platform-best soft_labelrefresh was soft-fusion @ imgsz=768
+# (fold1 val mAP50-95=0.47325, platform 50.505). The dataset has native 1920x1080
+# frames whose small objects (boat/uav/sign/ball) lose resolution when downscaled
+# to 768. v0.14 proved clean RGB @1024 hit fold1 0.483; we never tried SOFT+1024.
+# This run keeps the soft-fusion input distribution (which beat RGB@768) but
+# retrains at higher input res to recover small-object recall WITHOUT touching
+# class priors (no oversampling, no pseudo-labels).
+#
+# Single-stage unfrozen low-lr fine-tune from the platform-best soft 768 weight,
+# so we keep the soft distribution advantage and only adapt to 1024 resolution.
+#
+# Data: data/yolo_trimodal_soft_m  (clean, no dups; fold1 train 1600 / val 400)
+#   labels were refreshed 2026-09-02 -> clear *.cache first.
+#
+#   find data/yolo_trimodal_soft_m -name "*.cache" -delete
+
+model: runs/detect/runs/native_m_trimodal/soft768_labelrefresh_from_sar_best/weights/best.pt
+data: data/yolo_trimodal_soft_m/data.yaml
+epochs: 100
+imgsz: 1024
+batch: 12
+device: 0
+workers: 12
+seed: 42
+project: runs/native_m_trimodal
+name: soft1024_from_soft768_best
+exist_ok: false
+pretrained: true
+optimizer: AdamW
+lr0: 0.0002
+lrf: 0.02
+weight_decay: 0.0005
+warmup_epochs: 3.0
+cos_lr: true
+close_mosaic: 12
+mosaic: 0.6
+mixup: 0.06
+copy_paste: 0.05
+scale: 0.5
+translate: 0.08
+fliplr: 0.5
+flipud: 0.0
+hsv_h: 0.006
+hsv_s: 0.16
+hsv_v: 0.15
+multi_scale: false
+patience: 30
+save_period: 5
+val: true
+plots: true
+amp: true
+cache: ram
