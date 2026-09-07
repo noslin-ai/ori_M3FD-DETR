@@ -4,6 +4,38 @@
 
 ---
 
+## v0.21.1 (experiment) — 方向C:全量数据训练(1980 train / 20 monitor)启动
+
+**日期:** 2026-09-07
+**类型:** 训练 / 数据利用率最大化
+**背景:** 用户提出"2000 个数据全部利用上"。当前最佳 m@conf0.65=56.727 只用 1800 train(200 监控 val)。历史上数据量是**最强杠杆**(fold1 1600→full 1800,平台 +0.8~1.3)。方向 C 把 soft 融合训练数据扩到近全量。
+
+### 数据
+
+- 重建 `data/yolo_full2000soft_all2000`:**1980 train / 20 monitor val**(分层留 20 张覆盖各类别,仅监控、不参与选模)
+- 比当前 best(1800 train)**多 180 张(+10%)**
+- 从原始 data/train 的 visible/infrared/depth 三模态 soft 融合生成(ir0.18+depth0.10+sharpen0.24)
+- test 推理复用现有 `data/test_trimodal_soft`(1000 张,与 conf0.65 同源),无需重建
+
+### 训练
+
+- 配置:`configs/yolo_native_m_trimodal_full2000_all2000_soft1024.yaml`(已 push)
+- 从当前 best(full2000_soft1024_cont_noearly,平台 56.727)起步,imgsz=1024,90 轮,无早停(patience=0),save_period=6
+- 显存 19.8G/32G,~25s/epoch,预计 ~40 分钟
+- 本地 val 仅 20 张,噪声极大,**不作为选模依据**——完成后按 save_period 的多个 checkpoint 各自生成 conf0.65 提交,平台 A/B 选最高。
+
+### 判断
+
+- 1800→1980 多 10% 数据,按 fold1→full 的量级可能再 +0.3~0.8;若有效,后续可把剩余 20 也并回(但需监控,暂留)。
+- 若此方向有效,印证"数据量是核心杠杆";若无效,则 1800 附近已是数据利用率的边际甜点。
+
+### 状态
+
+- [x] 全量数据生成 + 训练启动(epoch 2/90 健康)。
+- [ ] 90 轮完成 → save_period 候选生成 conf0.65 提交 → 平台 A/B。
+
+---
+
 ## v0.21.0 (result) — X 平台实测未超 m,方向B(YOLO11x)确认放弃
 
 **日期:** 2026-09-07
