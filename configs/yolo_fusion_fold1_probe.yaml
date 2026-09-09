@@ -1,0 +1,46 @@
+# YOLO11m fold1 TRUE tri-modal (RGB/IR/Depth channels) probe — from 1280refine best.
+#
+# Direction-2 probe: channel-level tri-modal input (ch0 visible-detail, ch1 IR
+# CLAHE, ch2 depth+edges). History (v0.16.0) on old fold1 pipeline got local
+# 0.44 (pixel replacement hurt pretrained distribution), but never tested on the
+# current full2000/1280 lineage. Small probe: train on fold1 fused (1600/400)
+# from current best single model (1280refine, platform 57.024), short 12 epochs.
+# Decision gate: local val direction vs soft lineage (~0.65) BEFORE investing in
+# full-2000 retrain. If local < ~0.60 -> direction dead, stop.
+
+model: runs/detect/runs/native_m_trimodal/full2000cont_1280_refine/weights/best.pt
+data: data/yolo_trimodal_fusion_fold1/data.yaml
+epochs: 12
+imgsz: 1024
+batch: 16
+device: 0
+workers: 16
+seed: 42
+project: runs/native_m_trimodal
+name: fusion_fold1_probe_from1280
+exist_ok: false
+pretrained: true
+optimizer: AdamW
+lr0: 0.00008
+lrf: 0.05
+weight_decay: 0.0005
+warmup_epochs: 1.0
+cos_lr: true
+close_mosaic: 5
+mosaic: 0.6
+mixup: 0.06
+copy_paste: 0.05
+scale: 0.4
+translate: 0.08
+fliplr: 0.5
+flipud: 0.0
+hsv_h: 0.002
+hsv_s: 0.05
+hsv_v: 0.05
+multi_scale: false
+patience: 0
+save_period: 4
+val: true
+plots: true
+amp: true
+cache: ram
