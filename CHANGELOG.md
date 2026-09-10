@@ -4,6 +4,40 @@
 
 ---
 
+## v0.25.1 (research) — 论文调研:小目标定位改进(匹配"高mAP50低mAP50-95"瓶颈)
+
+**日期:** 2026-09-07
+**类型:** 文献调研 / 改进方案
+**背景:** 合规方向穷尽后,调研论文寻找改进。诊断:1280refine best 本地 **mAP50=0.914 但 mAP50-95=0.647**——模型能检出但**高 IoU 定位不精**;最弱类 ball(0.492)/garbage(0.584)/sign(0.597)/bicycle(0.602)。这是典型"小目标定位"问题。
+
+### 找到的可落地改进(均合规=单模型训练侧)
+
+| 论文 | 方法 | 适配点 |
+|---|---|---|
+| arXiv 2110.13389 | **NWD**(Normalized Gaussian Wasserstein Distance)损失:框建模为2D高斯,用Wasserstein距离替代IoU回归 | IoU 对小目标位置偏差极敏感(正是高IoU掉分主因);NWD 尺度不变。论文小目标 +6.7 AP |
+| arXiv 2301.10051 | **Wise-IoU v3**:动态非单调聚焦,CIoU 升级 | 自动聚焦难/小样本,drop-in 替换 CIoU |
+| Information Fusion 2025 | **DSSM-Loss**:形变敏感,强调长宽比、抑制位置偏差 | 同为 tiny object 设计 |
+| Ultralytics 指引 | 高分辨率 + 多尺度训练 | 1280>1024 已证;多尺度训练增强鲁棒 |
+
+### 已实现
+
+- `tools/train_with_nwd.py`:**CIoU+NWD 混合 bbox 损失**(monkeypatch `ultralytics.utils.loss.bbox_iou`),`sim=(1-α)·CIoU+α·NWD`,`loss=1-sim`。已 CPU 验证 NWD 计算正确(相同框0.915/2倍差框0.535)。
+- 数据统计:1280 下平均目标 ~105px、中位 68px → NWD 常数 C 建议 64-80。
+
+### 候选实验(待用户定)
+
+1. NWD 混合损失重训 1280refine(α=0.5, 全量2000, 1280, ~36ep)
+2. WIoU v3 损失重训(CIoU drop-in)
+3. 多尺度训练(imgsz 随机 1024-1408)
+4. (备选)更高分辨率训练 1536
+
+### 状态
+
+- [x] 论文调研完成,NWD 补丁实现并验证。
+- [ ] 用户选定实验方向后启动训练。
+
+---
+
 ## v0.25.0 (result) — 多尺度TTA无增益 + 真三模态证伪;合规最佳维持 57.0240
 
 **日期:** 2026-09-07
