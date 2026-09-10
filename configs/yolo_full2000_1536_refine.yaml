@@ -1,0 +1,47 @@
+# YOLO11m full2000 1536 refinement — resolution ladder step 3 (1024->1280->1536).
+#
+# 1024->1280 refine (full2000cont_1280_refine) was platform-verified best
+# (conf0.47=57.024). Ladder continues: start from 1280refine best, train at
+# 1536 with very low LR + weak aug (same recipe family). New resolution reopens
+# learning space after 1280 local saturation (0.649). Small-object pixel count
+# +44% vs 1280.
+#
+# Inference afterwards MUST use imgsz=1536 (+full TTA). Optional follow-up:
+# tile TTA on top (compliant single-model multi-view).
+
+model: runs/detect/runs/native_m_trimodal/full2000cont_1280_refine/weights/best.pt
+data: data/yolo_full2000_soft/data.yaml
+epochs: 30
+imgsz: 1536
+batch: 5
+device: 0
+workers: 12
+seed: 42
+project: runs/native_m_trimodal
+name: full2000_1536_refine
+exist_ok: false
+pretrained: true
+optimizer: AdamW
+lr0: 0.00002
+lrf: 0.05
+weight_decay: 0.0005
+warmup_epochs: 1.0
+cos_lr: true
+close_mosaic: 0
+mosaic: 0.0
+mixup: 0.0
+copy_paste: 0.0
+scale: 0.1
+translate: 0.02
+fliplr: 0.5
+flipud: 0.0
+hsv_h: 0.002
+hsv_s: 0.05
+hsv_v: 0.05
+multi_scale: false
+patience: 999
+save_period: 5
+val: true
+plots: true
+amp: true
+cache: ram
