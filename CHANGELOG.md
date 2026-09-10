@@ -4,6 +4,37 @@
 
 ---
 
+## v0.25.2 (experiment) — NWD混合损失重训启动(单变量A/B)
+
+**日期:** 2026-09-07
+**类型:** 训练 / 小目标定位改进
+**背景:** 论文调研后选定选项A:NWD(Normalized Gaussian Wasserstein Distance, arXiv 2110.13389)混合 bbox 损失,直击诊断出的瓶颈(高mAP50低mAP50-95;小类ball/garbage/sign/bicycle弱)。
+
+### 实验设计(干净单变量)
+
+| | 对照(已有) | 处理(本轮) |
+|---|---|---|
+| 起点 | 1024冠军 full2000_soft1024_cont_noearly | **同** |
+| 数据 | yolo_full2000_soft 1800/200 | **同** |
+| imgsz/batch/lr/aug/seed/epochs | 1280/8/4e-5/弱增强/42/36 | **同** |
+| **bbox损失** | CIoU | **CIoU+NWD (α=0.5, C=64)** |
+
+→ 唯一变量 = 损失函数,结果可归因。
+
+### 实现
+
+- `tools/train_with_nwd.py`:monkeypatch `ultralytics.utils.loss.bbox_iou`,`sim=(1-α)·CIoU+α·NWD`,`loss=1-sim`。已CPU验证。
+- C=64 依据:1280下目标中位尺寸68px。
+- run:`runs/native_m_trimodal/full2000_1280_nwd_refine`
+- 启动确认:NWD补丁生效(alpha0.5/C64),epoch1/36,GPU98%,16.6G。预计~25min。
+
+### 状态
+
+- [x] NWD训练启动,补丁确认生效。
+- [ ] 训练完成 → 平台测(与1280refine@conf0.47=57.024对比),重点看小类是否提升。
+
+---
+
 ## v0.25.1 (research) — 论文调研:小目标定位改进(匹配"高mAP50低mAP50-95"瓶颈)
 
 **日期:** 2026-09-07
