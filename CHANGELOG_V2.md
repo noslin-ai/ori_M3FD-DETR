@@ -1,6 +1,6 @@
 # V2 新路线实验日志
 
-> 面向城市场景视觉多模态目标检测的新项目记录。此文件与旧路线 `CHANGELOG.md` 分离，供协作者接力。
+> 面向城市场景视觉多模态目标检测的新项目记录。**最新记录置顶**，供协作者快速接力；旧路线见 `CHANGELOG.md`。
 
 ## 项目基线与硬约束
 
@@ -11,54 +11,36 @@
 - 原始训练集：2000 组三模态数据；测试集：1000 组。
 - 大图 depth 为真实 uint16 毫米 PNG（0 表示无效）；少量小图 depth 为退化 uint8 JPEG；IR 三通道完全相同。
 
-## v2.0.0 — 新工作区与路线重置（2026-09-11）
+## v2.0.3 — Step 2 全图纯尺度 A/B（运行中，2026-09-11）
 
-### 目标
+脚本：`/tmp/chain_s2_fullscale.sh`；数据 manifest：`data/s2_fullscale/`；正式划分：`data/folds5_v2/fold0.txt`。
 
-摆脱旧 soft-fusion 输入和单一 200 张验证集，从原始 RGB/IR/depth 重建可复现的单模型方案。
+| Run | 输入 | Batch | Epoch | 状态 |
+|---|---:|---:|---:|---|
+| `runs/detect/runs/s2/full1280_v2` | 1280（大图约 0.667×） | 8 | 40 | 已完成 |
+| `runs/detect/runs/s2/full1920_v2` | 1920（大图基本 1:1） | 4 | 40 | 2026-09-11 23:37:26 启动 |
 
-### 工作区
+控制变量：同一 RGB 数据、fold、YOLO11m 初始权重、优化器、增强、seed；无 crop、无漏 GT、无接缝、保留全局上下文。
 
-- 主目录：`/root/autodl-tmp/aic_race/M3F-DETR`
-- 新服务器作为 V2 唯一实验区；旧服务器只保留备份。
-- 删除 `CityViMD-Net`（约 1.4 GB）及历史派生产物，保留原始 train/test 数据。
+训练日志：
 
-### 路线
+- `runs/detect/runs/s2/logs/full1280_v2.log`
+- `runs/detect/runs/s2/logs/full1920_v2.log`
+- 完成摘要将归档到 `runs/detect/runs/s2/logs/s2_fullscale_summary.txt`
 
-1. 正确的 5 折 OOF 与官方口径指标。
-2. 原生像素尺度训练/推理。
-3. 保留 RGB 主干的 IR/depth Adapter，而不是直接替换 RGB 输入。
-4. 只对单折明确正收益的候选运行完整 OOF。
+关机策略：`full1920_v2` 成功完成并出现 `TRAINING_DONE` 后，守护脚本先将 `/tmp` 日志复制为上述持久文件，执行 `sync`，随后 `shutdown -h now`。若训练链异常退出，则不关机。统一测评延期到下次开机后执行。
 
-## v2.0.1 — 评测基础设施审计与修复（2026-09-11）
+采用规则：fold0 只筛选；若 1920 有明确收益，再进入更多折。最终候选必须使用 `folds5_v2` OOF，并以平台单模型 A/B 判定能否超过 57.024。
 
-### 官方指标
+### 下一步（尚未运行）
 
-文件：`/tmp/official_metric.py`（本地 staging：`v2/official_metric.py`）。
+主线不是直接 6 通道替换首层，而是：
 
-修复：GT 必须独立遍历 `gts.items()`；旧实现通过 `preds.items()` 收集 GT，会漏掉零预测图片的全部 GT并虚高 AP。两图合成单测：修复后得分 **50.4950**。
-
-### 5 折划分
-
-旧 `data/folds5` 的统计有 bookkeeping bug：图片被分配后只更新负责分配的类别，没有更新同图其他类别。
-
-正式划分改用：`data/folds5_v2/`。
-
-真实实例分布：
-
-- fold 图片数：395 / 399 / 401 / 405 / 400
-- person：1110 / 1110 / 1110 / 1109 / 1110
-- boat：27 / 27 / 27 / 27 / 27
-- ball：19 / 19 / 19 / 19 / 19
-- uav：41 / 42 / 42 / 42 / 41
-- tricycle：6 / 6 / 5 / 5 / 5
-
-### 评测后处理
-
-- 每张**原图**最终最多 100 框。
-- tile 重叠区采用独占责任边界，再做跨 tile 类内 NMS。
-- 修复小图文件误入 `_0/_1` tile 名称解析的问题。
-- 该仓库的 `YOLO.predict()` warmup 在 1280 上异常占用超过 24 GB；V2 评测改用未融合的原始 `m.model` FP16 前向，自行执行 LetterBox、NMS 和坐标还原。
+- RGB：保留原 YOLO11m 预训练主干。
+- IR：独立轻量 Adapter。
+- Depth：`log-depth + valid mask` 独立 Adapter；退化 JPEG depth 第一版关闭。
+- 在 P2/P3 做零初始化门控残差注入；初始输出严格等于 RGB 基线。
+- 消融顺序：RGB → RGB+IR → RGB+depth/mask → 双 Adapter → P2 与 P2+P3。
 
 ## v2.0.2 — Step 1 静态 crop pilot（2026-09-11）
 
@@ -102,25 +84,51 @@ B 并非“双窗口训练”。A/B 都有 1601 个训练样本，但 B 只保�
 - 当前静态 crop 端到端方案仍低于整图对照，不进入完整 5 折。
 - 因 B 永久漏掉 25.26% GT，本结果不能否定原生尺度；下一步使用不裁图的 1920 全图对照。
 
-## v2.0.3 — Step 2 全图纯尺度 A/B（运行中，2026-09-11）
+## v2.0.1 — 评测基础设施审计与修复（2026-09-11）
 
-脚本：`/tmp/chain_s2_fullscale.sh`；数据 manifest：`data/s2_fullscale/`；正式划分：`data/folds5_v2/fold0.txt`。
+### 官方指标
 
-| Run | 输入 | Batch | Epoch | 状态 |
-|---|---:|---:|---:|---|
-| `runs/detect/runs/s2/full1280_v2` | 1280（大图约 0.667×） | 8 | 40 | 运行中 |
-| `runs/detect/runs/s2/full1920_v2` | 1920（大图基本 1:1） | 4 | 40 | 等待串行启动 |
+文件：`/tmp/official_metric.py`（本地 staging：`v2/official_metric.py`）。
 
-控制变量：同一 RGB 数据、fold、YOLO11m 初始权重、优化器、增强、seed；无 crop、无漏 GT、无接缝、保留全局上下文。
+修复：GT 必须独立遍历 `gts.items()`；旧实现通过 `preds.items()` 收集 GT，会漏掉零预测图片的全部 GT 并虚高 AP。两图合成单测：修复后得分 **50.4950**。
 
-采用规则：fold0 只筛选；若 1920 有明确收益，再进入更多折。最终候选必须使用 `folds5_v2` OOF，并以平台单模型 A/B 判定能否超过 57.024。
+### 5 折划分
 
-## Step 3 预定多模态结构（尚未运行）
+旧 `data/folds5` 的统计有 bookkeeping bug：图片被分配后只更新负责分配的类别，没有更新同图其他类别。
 
-主线不是直接 6 通道替换首层，而是：
+正式划分改用：`data/folds5_v2/`。
 
-- RGB：保留原 YOLO11m 预训练主干。
-- IR：独立轻量 Adapter。
-- Depth：`log-depth + valid mask` 独立 Adapter；退化 JPEG depth 第一版关闭。
-- 在 P2/P3 做零初始化门控残差注入；初始输出严格等于 RGB 基线。
-- 消融顺序：RGB → RGB+IR → RGB+depth/mask → 双 Adapter → P2 与 P2+P3。
+真实实例分布：
+
+- fold 图片数：395 / 399 / 401 / 405 / 400
+- person：1110 / 1110 / 1110 / 1109 / 1110
+- boat：27 / 27 / 27 / 27 / 27
+- ball：19 / 19 / 19 / 19 / 19
+- uav：41 / 42 / 42 / 42 / 41
+- tricycle：6 / 6 / 5 / 5 / 5
+
+### 评测后处理
+
+- 每张原图最终最多 100 框。
+- tile 重叠区采用独占责任边界，再做跨 tile 类内 NMS。
+- 修复小图文件误入 `_0/_1` tile 名称解析的问题。
+- 该仓库的 `YOLO.predict()` warmup 在 1280 上异常占用超过 24 GB；V2 评测改用未融合的原始 `m.model` FP16 前向，自行执行 LetterBox、NMS 和坐标还原。
+
+## v2.0.0 — 新工作区与路线重置（2026-09-11）
+
+### 目标
+
+摆脱旧 soft-fusion 输入和单一 200 张验证集，从原始 RGB/IR/depth 重建可复现的单模型方案。
+
+### 工作区
+
+- 主目录：`/root/autodl-tmp/aic_race/M3F-DETR`
+- 新服务器作为 V2 唯一实验区；旧服务器只保留备份。
+- 删除 `CityViMD-Net`（约 1.4 GB）及历史派生产物，保留原始 train/test 数据。
+
+### 路线
+
+1. 正确的 5 折 OOF 与官方口径指标。
+2. 原生像素尺度训练/推理。
+3. 保留 RGB 主干的 IR/depth Adapter，而不是直接替换 RGB 输入。
+4. 只对单折明确正收益的候选运行完整 OOF。
