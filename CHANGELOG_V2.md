@@ -11,13 +11,16 @@
 - 原始训练集：2000 组三模态数据；测试集：1000 组。
 - 大图 depth 为真实 uint16 毫米 PNG（0 表示无效）；少量小图 depth 为退化 uint8 JPEG；IR 三通道完全相同。
 
-## v2.0.13 — 57.024 champion 的 valid-aware 分布锚定 Adapter（进行中，2026-09-12）
+## v2.0.13 — 57.024 champion 的 valid-aware 分布锚定 Adapter（完成，淘汰，2026-09-12）
 
 - 按用户要求只从平台最佳 **57.0240** 的 `full2000cont_1280_refine/weights/best.pt` 起步，不继承平台 54.7800 的 V2 fold0 三模态权重。
 - 首次 ungated 探索已完成 20 epoch：最佳 epoch 12、当前 200-val 内置 mAP50–95 **0.65043**；原 champion 历史末轮为约 0.64660。由于标签已更新，该差值仅作训练趋势参考，不宣称平台增益；原 YOLO 参数逐项 `max_diff=0.0`。
 - 下一组从 champion 重新零初始化 IR/depth P2/P3 Adapter，保留 CVPR 2026 启发的逐通道均值/标准差分布锚定，并加入 v2.0.12 已在 fold0 验证为正的 depth valid-mask 空间门控。
 - 除 depth gate 外保持首组配置不变：soft 1800/200、最新 `data/train/labels`、1280、batch 8、20 epoch、AdamW `lr0=5e-4`、alignment weight 0.05；训练前仍要求输出 `max_abs_diff=0.0`。
 - Run 计划：`runs/detect/runs/s5/champion_da_trimodal_validgate`；以超过 ungated 0.65043 为本地保留门槛。
+- 20/20 epoch 完整训练结束；逐轮 CSV 峰值为 epoch 7 的 **0.65104**，仅比 ungated 0.65043 高 0.00061。
+- 训练结束重新加载同一 `best.pt` 后验证仅约 **0.647**，无法复现逐轮峰值且低于 ungated 权重重载约 0.650；checkpoint 已确认保留 `depth_valid_gate=True`、`align_weight=0.05`，并非属性丢失。
+- 按“重载后可复现”标准淘汰 valid-gate 权重，不生成测试提交包；保留 ungated `champion_da_trimodal_p23/weights/best.pt` 为实验候选，平台最佳仍为 57.0240 原权重。
 
 ## v2.0.12 — Valid-aware depth Adapter（fold1 复验中，2026-09-12）
 
