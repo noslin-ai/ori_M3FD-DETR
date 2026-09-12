@@ -13,7 +13,8 @@ from ultralytics.utils import ops
 from ultralytics.utils.nms import non_max_suppression
 
 VIS=f'{ROOT}/data/train/visible'; IR=f'{ROOT}/data/train/infrared'; DEP=f'{ROOT}/data/train/depth'; LBL=f'{ROOT}/data/train/labels'
-FOLD=f'{ROOT}/data/folds5_v2/fold0.txt'; OUT=f'{ROOT}/runs/detect/runs/s3/eval'
+FOLD=os.environ.get('V2_EVAL_FOLD',f'{ROOT}/data/folds5_v2/fold0.txt')
+OUT=os.environ.get('V2_EVAL_OUT',f'{ROOT}/runs/detect/runs/s3/eval')
 NAMES=['person','boat','animal','seat','sign','bicycle','car','ball','light','garbage can','uav','tricycle']
 MAX_DET=100; os.makedirs(OUT,exist_ok=True)
 
@@ -27,7 +28,7 @@ def path_map(d):
     return out
 PM,IM,DM=path_map(VIS),path_map(IR),path_map(DEP)
 STEMS=sorted(open(FOLD).read().split())
-assert len(STEMS)==395 and all(s in PM and s in IM and s in DM for s in STEMS)
+assert STEMS and all(s in PM and s in IM and s in DM for s in STEMS)
 
 def gt(stem):
     a=[]; p=f'{LBL}/{stem}.txt'
@@ -76,7 +77,8 @@ def infer(weights,imgsz,tag):
             im,aux=letterbox_pair(im0,aux,lb)
             rgb=np.ascontiguousarray(im[:,:,::-1].transpose(2,0,1)).astype(np.float32)
             au=np.ascontiguousarray(aux.transpose(2,0,1))
-            x=torch.from_numpy(np.concatenate((rgb,au),0)).to('cuda').half().div_(255).unsqueeze(0)
+            arr=np.concatenate((rgb,au),0) if hasattr(net,'use_ir') else rgb
+            x=torch.from_numpy(arr).to('cuda').half().div_(255).unsqueeze(0)
             raw=net(x); pred=raw[0] if isinstance(raw,(tuple,list)) else raw
             d=non_max_suppression(pred,conf_thres=.001,iou_thres=.7,max_det=MAX_DET)[0]
             rows=[]

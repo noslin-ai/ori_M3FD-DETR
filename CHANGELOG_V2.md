@@ -11,11 +11,23 @@
 - 原始训练集：2000 组三模态数据；测试集：1000 组。
 - 大图 depth 为真实 uint16 毫米 PNG（0 表示无效）；少量小图 depth 为退化 uint8 JPEG；IR 三通道完全相同。
 
-## v2.0.9 — fold1 独立复验（运行中，2026-09-12）
+## v2.0.10 — 首个三模态测试集提交包（2026-09-12）
+
+- 权重：fold0 稳健主权重 `runs/detect/runs/s3/trimodal_adapter_p23_frozen/weights/best.pt`；训练使用 1605 张、未使用测试集训练。
+- 对测试集 1000 组 RGB+IR+depth 做单模型、单次 1280 推理，缓存每图 top-100。
+- 两折 OOF conf sweep 推荐 `conf=0.001`；其 AP 43.2385，高于 0.30 的 39.0040 和 0.47 的 36.5144。
+- 推荐包：`submissions/trimodal_fold0_conf0.00.zip`（对外交付名 `submission_trimodal_fold0_conf0.001.zip`），1000 TXT、31,632 框、每图最多 100。
+- 备用包：`submissions/trimodal_fold0_conf0.47.zip`，1000 TXT、4,395 框、每图最多 30。
+- 推荐包 SHA256：`15a7f851478901ab8fe3f74e0117a74641a54638f97942956bcbc7d6718c9a66`。
+- 备用包 SHA256：`91da57ac960cbfaeaa5d076507ccbe099d773f785642a14b7821f43563cf8429`。
+
+## v2.0.9 — fold1 独立复验（完成，2026-09-12）
 
 - 不再继续利用 fold0 调参，改用 `folds5_v2/fold1` 独立验证三模态增益。
 - 串行训练匹配的 RGB-1280 基线 40 epoch → IR Adapter 20 epoch → RGB+IR+depth Adapter 20 epoch；三者训练集、验证集和几何配置一致。
 - 使用 zero-copy manifest/symlink，不复制原始数据；Run 统一位于 `runs/detect/runs/s4/`。
+- fold1 官方分数：RGB **43.2538**；IR-only **43.5889**（+0.3351）；三模态 **43.4263**（相对 RGB +0.1725、相对 IR −0.1626）。IR 增益跨折复现，depth 在 fold1 未提供额外增益。
+- fold0+fold1 共 794 张 OOF bootstrap：IR−RGB 均值 +0.2364、`P>0=0.81`；三模态−RGB 均值 +0.2204、95% CI `[-0.2429,+0.6989]`、`P>0=0.805`。两折点估计为正但尚未显著。
 
 ## v2.0.8 — 三模态 neck/head 适配（候选，不替代主权重，2026-09-12）
 
