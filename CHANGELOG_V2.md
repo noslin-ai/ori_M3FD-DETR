@@ -11,6 +11,13 @@
 - 原始训练集：2000 组三模态数据；测试集：1000 组。
 - 大图 depth 为真实 uint16 毫米 PNG（0 表示无效）；少量小图 depth 为退化 uint8 JPEG；IR 三通道完全相同。
 
+## v2.0.16 — Champion推理链复现与Adapter公平A/B候选（2026-09-12）
+
+- 原Champion推理口径已从日志复现：`imgsz=1280`、full-image TTA、首层NMS IoU=0.6、二次class-wise fusion NMS IoU=0.55、max_det=100、FP32；重新生成 `submissions/repro_champion_exact_conf0.47.zip`，1000文件、5063框，与57.024历史包的记录一致，SHA256 `e2988a29c28ba59f981cf247b7d762b002b9858278e30e3d81eb93d452a0d703`。
+- 发现旧V2 Adapter包并非单变量A/B：旧脚本无TTA、首层NMS IoU=0.7、FP16，且漏掉历史脚本的二次fusion NMS IoU=0.55；此前55.757不能单独归因为Adapter权重。
+- 实物权重核验：IR Adapter checkpoint中原Champion的649个共有state_dict张量逐元素完全一致（different=0）；关掉inject后按修正链推理也是5063框。自定义6通道数值路径和原Ultralytics predictor输出文本非逐字节相同，因此只宣称模型权重和推理设置受控，不宣称zip字节复现。
+- 公平A/B候选：`submissions/champion_da_ir_p23_soft_TTAEXACT_conf0.47.zip`，1000文件、5070框、SHA256 `41d75c69ec5090d7d1a85723807f82851ba7372e729e4629b508cdb6991162ad`。同缓存备选：conf0.45=5098框；conf0.49=5045框。平台首测只交conf0.47；若仍不超过57.024，关闭该Adapter家族。
+
 ## v2.0.15 — 平台反馈与推理审计（2026-09-12）
 
 - 用户报告：`submission_trimodal_full2000_cont10_conf0.47.zip` **55.2580**；`champion_da_ir_p23_soft_countmatch5063_conf0.29.zip` **55.5530**；`champion_da_ir_p23_soft_conf0.47.zip` **55.7570**。相对57.024分别为−1.766、−1.471、−1.267。当前候选不晋级，暂停Adapter扩容、换seed和继续训练。
