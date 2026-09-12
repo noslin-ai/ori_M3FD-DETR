@@ -11,7 +11,14 @@
 - 原始训练集：2000 组三模态数据；测试集：1000 组。
 - 大图 depth 为真实 uint16 毫米 PNG（0 表示无效）；少量小图 depth 为退化 uint8 JPEG；IR 三通道完全相同。
 
-## v2.0.6 — RGB+IR+depth 三模态 Adapter（运行中，2026-09-12）
+## v2.0.7 — 三模态 Adapter 低学习率续训（运行中，2026-09-12）
+
+- 原 run 的最佳点仍在最后一个 epoch 20，未显示明确收敛。
+- 从 `trimodal_adapter_p23_frozen/weights/best.pt` 继续训练 10 epoch；RGB backbone/neck/head 仍冻结，仅更新 IR/depth Adapter。
+- LR 从 `5e-4` 降至 `2e-4`，避免已获得的稳定增益被大步更新破坏。
+- Run：`runs/detect/runs/s3/trimodal_adapter_p23_frozen_cont`。
+
+## v2.0.6 — RGB+IR+depth 三模态 Adapter（完成，2026-09-12）
 
 ### 方案与验收
 
@@ -25,6 +32,14 @@
 - Run：`runs/detect/runs/s3/trimodal_adapter_p23_frozen`
 - 配置：folds5_v2/fold0、imgsz 1280、batch 8、20 epoch、AdamW lr0=5e-4；RGB backbone/neck/head 继续冻结，IR 与 depth Adapter 联合训练。
 - 日志：`runs/detect/runs/s3/logs/trimodal_adapter_p23_frozen.log`
+
+### 结果
+
+- 最佳 epoch：20；官方原图级 fold0：**44.1243**。
+- 相对 RGB-1280 `43.5798`：**+0.5445**；相对 IR-only `43.8725`：**+0.2518**。
+- 大图相对 RGB：`42.3936 → 43.0337`（**+0.6401**）；小图：`64.8201 → 64.6097`（−0.2104）。
+- 逐类 9/12 类高于 RGB；boat +3.118、light +1.105、tricycle +1.084，主要下降为 uav −0.970、person −0.293。
+- 200 次配对 bootstrap（三模态−RGB）：均值 **+0.5250**，95% CI **[+0.1589, +1.0992]**，`P(delta>0)=0.99`。这是 V2 首个 fold0 置信区间完全高于 0 的结构增益，保留三模态路线。
 
 ## v2.0.5 — IR P2/P3 零残差 Adapter（完成，2026-09-12）
 
