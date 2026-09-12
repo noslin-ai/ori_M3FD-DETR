@@ -11,6 +11,13 @@
 - 原始训练集：2000 组三模态数据；测试集：1000 组。
 - 大图 depth 为真实 uint16 毫米 PNG（0 表示无效）；少量小图 depth 为退化 uint8 JPEG；IR 三通道完全相同。
 
+## v2.0.18 — depth-only淘汰；D-FINE-L 1280正式训练（2026-09-12）
+
+- `s7/champion_ir_depthonly_p23`完成20/20。训练脚本虽将IR参数`requires_grad=False`，但IR Adapter的6个BN running buffers仍在train mode更新；恢复57.180 IR checkpoint全部671个共有state_dict张量后，depth-only保留22个depth tensors（19非零）。恢复版held-out soft-val200官方AP **64.2588**，低于IR-only **64.6190** 达 **−0.3602**；按预设止损淘汰，不生成平台包。后续真正冻结含BN buffer必须令对应模块保持eval。
+- 独立检测器路线启动：官方D-FINE commit `956d1709`，Objects365 E25预训练D-FINE-L（123MB，SHA256 `af2ec45453ce9dfb3208f852ae199adfd8fe232c458016b4bcb27bced23a69db`）。现有soft三模态1800/200转换为COCO：13,610/1,585 annotations，12类Objects365 head映射 `[0,21,92,2,89,46,5,156,40,44,114,183]`。
+- 5090吞吐实测：1280/batch8稳定但仅约20.4GB；batch12峰值约29.9GB并OOM；batch11初次因`ulimit -n=1024`导致DataLoader `received 0 items of ancdata`，提高到65535后整轮稳定，训练163 iter约106秒、PyTorch max mem 27.8GB、nvidia-smi峰值30.9GB。因此正式固定1280/batch11/workers12/AMP，不再冒险batch12。
+- 正式run：`/root/autodl-tmp/aic_race/D-FINE/output/aic_dfine_l_obj365_soft1280_b11`，36 epoch；日志同名`.log`，GPU遥测同名`_gpu.csv`。只做soft三模态输入的单模型控制，不叠加Adapter、蒸馏、类别重权或多尺度；完成后先看held-out COCO AP，再生成单模型测试提交与57.180平台A/B。
+
 ## v2.0.17 — 公平推理链Adapter升至57.180；深度单变量续接（2026-09-12）
 
 - 平台反馈：`champion_da_ir_p23_soft_TTAEXACT_conf0.47.zip` = **57.1800**，超过原57.0240 **+0.1560**，成为新的合规单模型最佳；证明此前55.757主要受无TTA/FP16/缺二次NMS/IoU差异的推理链混淆，不能据此否定IR Adapter。

@@ -1,0 +1,69 @@
+__include__: [
+  '../dataset/custom_detection.yml',
+  '../runtime.yml',
+  '../dfine/include/dataloader.yml',
+  '../dfine/include/optimizer.yml',
+  '../dfine/include/dfine_hgnetv2.yml',
+]
+
+output_dir: ./output/aic_dfine_l_obj365_soft1280_b11
+num_classes: 12
+remap_mscoco_category: False
+eval_spatial_size: [1280, 1280]
+print_freq: 25
+checkpoint_freq: 6
+
+DFINE:
+  backbone: HGNetv2
+HGNetv2:
+  name: 'B4'
+  return_idx: [1, 2, 3]
+  freeze_stem_only: True
+  freeze_at: 0
+  freeze_norm: True
+  pretrained: False
+optimizer:
+  type: AdamW
+  params:
+    - {params: '^(?=.*backbone)(?!.*norm|bn).*$', lr: 0.0000125}
+    - {params: '^(?=.*(?:encoder|decoder))(?=.*(?:norm|bn)).*$', weight_decay: 0.}
+  lr: 0.00025
+  betas: [0.9, 0.999]
+  weight_decay: 0.000125
+
+epochs: 36
+train_dataloader:
+  dataset:
+    img_folder: /root/autodl-tmp/aic_race/M3F-DETR/data/yolo_full2000_soft/train/images
+    ann_file: /root/autodl-tmp/aic_race/D-FINE/data/aic_soft/annotations/instances_train.json
+    transforms:
+      policy: {epoch: 30}
+      ops:
+        - {type: RandomPhotometricDistort, p: 0.5}
+        - {type: RandomZoomOut, fill: 0}
+        - {type: RandomIoUCrop, p: 0.8}
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: RandomHorizontalFlip}
+        - {type: Resize, size: [1280, 1280]}
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+        - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True}
+  total_batch_size: 11
+  num_workers: 12
+  collate_fn:
+    base_size: 1280
+    base_size_repeat: ~
+    stop_epoch: 30
+    ema_restart_decay: 0.9999
+val_dataloader:
+  dataset:
+    img_folder: /root/autodl-tmp/aic_race/M3F-DETR/data/yolo_full2000_soft/val/images
+    ann_file: /root/autodl-tmp/aic_race/D-FINE/data/aic_soft/annotations/instances_val.json
+    transforms:
+      ops:
+        - {type: Resize, size: [1280, 1280]}
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+  total_batch_size: 11
+  num_workers: 12
+ema: {warmups: 0}
+lr_warmup_scheduler: {warmup_duration: 0}
