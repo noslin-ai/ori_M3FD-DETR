@@ -11,12 +11,19 @@
 - 原始训练集：2000 组三模态数据；测试集：1000 组。
 - 大图 depth 为真实 uint16 毫米 PNG（0 表示无效）；少量小图 depth 为退化 uint8 JPEG；IR 三通道完全相同。
 
-## v2.0.7 — 三模态 Adapter 低学习率续训（运行中，2026-09-12）
+## v2.0.8 — 三模态 neck/head 适配（运行中，2026-09-12）
+
+- 从保留的三模态最佳 `44.1243` 起步；冻结 RGB backbone layer 0–10，解冻 neck、Detect 和两个 Adapter。
+- 以 AdamW `lr0=2e-5` 微调 10 epoch，使后半网络适配 P2/P3 三模态残差，同时尽量避免破坏 RGB 表示。
+- Run：`runs/detect/runs/s3/trimodal_neckhead_ft`。
+
+## v2.0.7 — 三模态 Adapter 低学习率续训（淘汰，2026-09-12）
 
 - 原 run 的最佳点仍在最后一个 epoch 20，未显示明确收敛。
 - 从 `trimodal_adapter_p23_frozen/weights/best.pt` 继续训练 10 epoch；RGB backbone/neck/head 仍冻结，仅更新 IR/depth Adapter。
 - LR 从 `5e-4` 降至 `2e-4`，避免已获得的稳定增益被大步更新破坏。
 - Run：`runs/detect/runs/s3/trimodal_adapter_p23_frozen_cont`。
+- 最佳内置 val 出现在续训 epoch 2；官方原图级结果 **43.9046**，比起点 **44.1243** 下降 **0.2197**，不保留该权重。
 
 ## v2.0.6 — RGB+IR+depth 三模态 Adapter（完成，2026-09-12）
 
