@@ -135,7 +135,7 @@ class TriModalYOLODataset(YOLODataset):
         return self.label_files
 
     def get_cache_hash(self):
-        return get_hash(self.label_files + self.im_files + self.ir_files + self.depth_files + ["trimodal-logdepth-v1"])
+        return get_hash(self.label_files + self.im_files + self.ir_files + self.depth_files + [__file__])
 
     def get_image_and_label(self, index):
         labels = super().get_image_and_label(index)
@@ -161,9 +161,10 @@ class TriModalYOLODataset(YOLODataset):
             d *= 255.0
             v = valid.astype(np.float32) * 255.0
         else:
-            # JPEG depth has lost metric calibration and ~73% support; disable it in v1.
-            d = np.zeros(dep.shape, np.float32)
-            v = np.zeros(dep.shape, np.float32)
+            # JPEG depth has lost metric calibration; preserve normalized value plus support mask.
+            valid = dep > 0
+            d = dep.astype(np.float32)
+            v = valid.astype(np.float32) * 255.0
         labels["depth"] = np.stack((ir.astype(np.float32), d, v), axis=-1)
         return labels
 

@@ -114,3 +114,18 @@ def attach_adapters(model: DetectionModel, use_ir=True, use_depth=False) -> Adap
         return model
     model.__class__ = AdapterDetectionModel
     return model.attach_adapters(use_ir=use_ir, use_depth=use_depth)
+
+
+def add_depth_adapter(model: AdapterDetectionModel) -> AdapterDetectionModel:
+    """Add a zero-residual depth branch without disturbing a trained IR branch."""
+    if not isinstance(model, AdapterDetectionModel) or not getattr(model, "use_ir", False):
+        raise TypeError("expected an existing IR AdapterDetectionModel")
+    if getattr(model, "use_depth", False):
+        return model
+    ref = next(model.parameters())
+    model.use_depth = True
+    model.depth_adapter = AuxBranch(2).to(device=ref.device, dtype=ref.dtype)
+    model.depth_inject_p2 = _zero_conv(64, 256).to(device=ref.device, dtype=ref.dtype)
+    model.depth_inject_p3 = _zero_conv(128, 512).to(device=ref.device, dtype=ref.dtype)
+    model.criterion = None
+    return model

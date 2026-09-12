@@ -11,7 +11,22 @@
 - 原始训练集：2000 组三模态数据；测试集：1000 组。
 - 大图 depth 为真实 uint16 毫米 PNG（0 表示无效）；少量小图 depth 为退化 uint8 JPEG；IR 三通道完全相同。
 
-## v2.0.5 — IR P2/P3 零残差 Adapter（运行中，2026-09-12）
+## v2.0.6 — RGB+IR+depth 三模态 Adapter（运行中，2026-09-12）
+
+### 方案与验收
+
+- 从 `ir_adapter_p23_frozen/weights/best.pt` 暖启动，保留已学习的 IR P2/P3 Adapter。
+- 新增 depth 两通道分支：真实 uint16 数据使用 `log1p(depth)/log1p(20000) + valid mask`；退化 uint8 JPEG 使用 `value/255 + valid mask`，确保全部 2000 张训练图都实际使用 RGB、IR、depth。
+- Depth 在 P2/P3 通过独立零初始化 1×1 residual injection 接入；加入 depth 前后模型输出 `max_abs_diff = 0.0`。
+- 单模型、单 checkpoint、单次六通道在线推理，不做模型集成。
+
+### 正式运行
+
+- Run：`runs/detect/runs/s3/trimodal_adapter_p23_frozen`
+- 配置：folds5_v2/fold0、imgsz 1280、batch 8、20 epoch、AdamW lr0=5e-4；RGB backbone/neck/head 继续冻结，IR 与 depth Adapter 联合训练。
+- 日志：`runs/detect/runs/s3/logs/trimodal_adapter_p23_frozen.log`
+
+## v2.0.5 — IR P2/P3 零残差 Adapter（完成，2026-09-12）
 
 ### 结构
 
@@ -34,6 +49,13 @@
 - 配置：folds5_v2/fold0、imgsz 1280、batch 8、20 epoch、AdamW lr0=1e-3、warmup 2、仅 Adapter 可训练。
 - 日志：`runs/detect/runs/s3/logs/ir_adapter_p23_frozen.log`
 - 停止判据：与固定 RGB-1280 基线做相同原图级官方指标；若无明确正收益，则不进入 depth/双 Adapter 和其余折。
+
+### 结果
+
+- 最佳 epoch：12；官方原图级 fold0：**43.8725**，RGB-1280 基线 **43.5798**，提升 **+0.2927**。
+- 大图：`42.3936 → 42.8070`（**+0.4134**）；小图：`64.8201 → 65.6052`（**+0.7851**）。
+- 主要逐类变化：boat +2.566、light +1.068、seat +0.716；uav -1.386、tricycle -0.673、person -0.264。
+- 200 次原图级配对 bootstrap：均值 +0.2192，95% CI `[-0.2109, +0.5009]`，`P(delta>0)=0.90`。方向为正但单 fold 尚未显著，作为三模态暖启动继续验证。
 
 ## v2.0.4 — 全图 1280/1920 统一测评（2026-09-12）
 
