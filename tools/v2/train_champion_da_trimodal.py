@@ -40,13 +40,19 @@ def main():
     parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--align-weight", type=float, default=0.05)
     parser.add_argument("--depth-valid-gate", action="store_true")
+    parser.add_argument(
+        "--adapter-modalities", choices=("ir", "trimodal"), default="trimodal"
+    )
     parser.add_argument("--fraction", type=float, default=1.0)
     args = parser.parse_args()
 
     reference = YOLO(args.base).model.float().cuda().eval()
     yolo = YOLO(args.base)
     yolo.model = attach_distribution_aligned_adapters(
-        yolo.model, align_weight=args.align_weight
+        yolo.model,
+        align_weight=args.align_weight,
+        use_ir=True,
+        use_depth=args.adapter_modalities == "trimodal",
     ).float().cuda().eval()
     yolo.model.depth_valid_gate = args.depth_valid_gate
 

@@ -11,6 +11,13 @@
 - 原始训练集：2000 组三模态数据；测试集：1000 组。
 - 大图 depth 为真实 uint16 毫米 PNG（0 表示无效）；少量小图 depth 为退化 uint8 JPEG；IR 三通道完全相同。
 
+## v2.0.14 — 57.024 champion 的 IR-only 分布锚定 Adapter（进行中，2026-09-12）
+
+- 证据：V2 的 IR Adapter 在 fold0、fold1 均相对匹配 RGB 基线为正，而额外 depth 在 fold1 下降且 v2.0.13 的 valid gate 无法稳定重载复现；因此本轮只移除不稳定的额外 depth residual。
+- 起点仍为平台 **57.0240** champion；soft 主输入已由 RGB/IR/depth 像素级融合生成，所以整体输入信息仍是三模态，新增 P2/P3 Adapter 仅使用更稳定的 IR 纠偏。
+- 分布锚定、数据划分、最新标签、增强、优化器和 20 epoch 预算均与 v2.0.13 相同；新增 `--adapter-modalities ir` 开关，训练前必须保持 `max_abs_diff=0.0`。
+- Run 计划：`runs/detect/runs/s5/champion_da_ir_p23`；以 ungated 双辅助分支重载约 0.650 为保留门槛。
+
 ## v2.0.13 — 57.024 champion 的 valid-aware 分布锚定 Adapter（完成，淘汰，2026-09-12）
 
 - 按用户要求只从平台最佳 **57.0240** 的 `full2000cont_1280_refine/weights/best.pt` 起步，不继承平台 54.7800 的 V2 fold0 三模态权重。

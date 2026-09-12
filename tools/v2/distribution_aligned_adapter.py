@@ -12,8 +12,10 @@ from adapter_model import AdapterDetectionModel
 
 
 class DistributionAlignedAdapterModel(AdapterDetectionModel):
-    def attach_distribution_aligned_adapters(self, align_weight=0.05):
-        super().attach_adapters(use_ir=True, use_depth=True)
+    def attach_distribution_aligned_adapters(
+        self, align_weight=0.05, use_ir=True, use_depth=True
+    ):
+        super().attach_adapters(use_ir=use_ir, use_depth=use_depth)
         self.align_weight = float(align_weight)
         self._alignment_terms = []
         return self
@@ -47,10 +49,12 @@ class DistributionAlignedAdapterModel(AdapterDetectionModel):
 
 
 def attach_distribution_aligned_adapters(
-    model: AdapterDetectionModel, align_weight=0.05
+    model: AdapterDetectionModel, align_weight=0.05, use_ir=True, use_depth=True
 ) -> DistributionAlignedAdapterModel:
     if isinstance(model, DistributionAlignedAdapterModel):
         model.align_weight = float(align_weight)
         return model
     model.__class__ = DistributionAlignedAdapterModel
-    return model.attach_distribution_aligned_adapters(align_weight=align_weight)
+    return model.attach_distribution_aligned_adapters(
+        align_weight=align_weight, use_ir=use_ir, use_depth=use_depth
+    )
