@@ -11,16 +11,6 @@
 - 原始训练集：2000 组三模态数据；测试集：1000 组。
 - 大图 depth 为真实 uint16 毫米 PNG（0 表示无效）；少量小图 depth 为退化 uint8 JPEG；IR 三通道完全相同。
 
-## v2.0.13 — 从 57.024 champion 启动分布锚定三模态 Adapter（进行中，2026-09-12）
-
-- 唯一起点锁定为平台 **57.0240** 的 `full2000cont_1280_refine/weights/best.pt`，不重训或替换原 YOLO11m 主干、neck、Detect。
-- 参考 CVPR 2026 *Distribution-Aligned Multimodal Fusion for Robust Object Detection* 的“冻结检测器、仅训练轻量融合模块、约束融合特征回到预训练分布”思路；结合 CVPR 2026 *Tri-Modal Fusion Transformers for UAV-based Object Detection* 的浅层多尺度模态交换结论，仅在 P2/P3 接入 IR 与 depth。
-- 新增 `DistributionAlignedAdapterModel`：IR/depth 独立轻量分支以零初始化残差注入 P2/P3；检测损失之外，约束融合特征的逐通道均值和标准差贴近 57.024 champion 的同图冻结特征锚点，减少小数据训练导致的表示漂移。
-- 训练继续使用 champion 对应的 `yolo_full2000_soft` 1800/200 划分；标签由三模态 Dataset 按 stem 统一读取最新 `data/train/labels`，不使用测试集训练。
-- 训练前硬验收：六通道模型与原 champion 三通道输出必须 `max_abs_diff=0.0`；RGB YOLO 全部冻结，只允许 Adapter 更新。
-- 首轮配置：1280、batch 8、20 epoch、AdamW `lr0=5e-4`、alignment weight 0.05；保持 champion 的弱几何/颜色增强，关闭会造成跨模态内容不一致的自动增强与擦除。
-- Run 计划：`runs/detect/runs/s5/champion_da_trimodal_p23`。完成后先与固定 champion 在同一 200-val 上比较，再决定是否生成测试提交包。
-
 ## v2.0.12 — Valid-aware depth Adapter（fold1 复验中，2026-09-12）
 
 - 问题：普通 depth Adapter 在 fold0 提升、fold1 相对 IR-only 下降 0.1626，疑似无效深度区及稀疏 JPEG depth 污染残差。
