@@ -21,12 +21,14 @@
 - 首轮配置：1280、batch 8、20 epoch、AdamW `lr0=5e-4`、alignment weight 0.05；保持 champion 的弱几何/颜色增强，关闭会造成跨模态内容不一致的自动增强与擦除。
 - Run 计划：`runs/detect/runs/s5/champion_da_trimodal_p23`。完成后先与固定 champion 在同一 200-val 上比较，再决定是否生成测试提交包。
 
-## v2.0.12 — Valid-aware depth Adapter（运行中，2026-09-12）
+## v2.0.12 — Valid-aware depth Adapter（fold1 复验中，2026-09-12）
 
 - 问题：普通 depth Adapter 在 fold0 提升、fold1 相对 IR-only 下降 0.1626，疑似无效深度区及稀疏 JPEG depth 污染残差。
 - 改动：在 depth 分支 P2/P3 特征注入前，用 valid mask 的对应尺度平均有效率做逐位置门控；RGB 与 IR 路径不变。
 - 从 fold0 IR-only best 重新加入零初始化 depth 分支；门控模型与 IR 起点 `max_abs_diff=0.0`。
 - Run：`runs/detect/runs/s6/fold0_trimodal_validgate`，20 epoch、Adapter-only；门槛为超过普通三模态 fold0 的 44.1243。
+- fold0 最佳 epoch 15，官方 **44.2721**，较普通三模态 **+0.1478**；大图 43.1125，小图 64.6669。
+- 已启动 fold1 同配置复验：`runs/detect/runs/s6/fold1_trimodal_validgate`；保留门槛为超过 fold1 普通三模态 43.4263。
 
 ## v2.0.11 — 平台首测与全量三模态候选（2026-09-12）
 
