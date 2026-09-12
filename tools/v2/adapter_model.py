@@ -64,6 +64,10 @@ class AdapterDetectionModel(DetectionModel):
             d3 = self.ir_inject_p3(p3)
         if self.use_depth:
             p2, p3 = self.depth_adapter(x[:, 4:6])
+            if getattr(self, "depth_valid_gate", False):
+                valid = x[:, 5:6]
+                p2 = p2 * torch.nn.functional.adaptive_avg_pool2d(valid, p2.shape[-2:])
+                p3 = p3 * torch.nn.functional.adaptive_avg_pool2d(valid, p3.shape[-2:])
             z2 = self.depth_inject_p2(p2)
             z3 = self.depth_inject_p3(p3)
             d2 = z2 if d2 is None else d2 + z2

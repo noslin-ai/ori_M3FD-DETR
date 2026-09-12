@@ -11,6 +11,13 @@
 - 原始训练集：2000 组三模态数据；测试集：1000 组。
 - 大图 depth 为真实 uint16 毫米 PNG（0 表示无效）；少量小图 depth 为退化 uint8 JPEG；IR 三通道完全相同。
 
+## v2.0.12 — Valid-aware depth Adapter（运行中，2026-09-12）
+
+- 问题：普通 depth Adapter 在 fold0 提升、fold1 相对 IR-only 下降 0.1626，疑似无效深度区及稀疏 JPEG depth 污染残差。
+- 改动：在 depth 分支 P2/P3 特征注入前，用 valid mask 的对应尺度平均有效率做逐位置门控；RGB 与 IR 路径不变。
+- 从 fold0 IR-only best 重新加入零初始化 depth 分支；门控模型与 IR 起点 `max_abs_diff=0.0`。
+- Run：`runs/detect/runs/s6/fold0_trimodal_validgate`，20 epoch、Adapter-only；门槛为超过普通三模态 fold0 的 44.1243。
+
 ## v2.0.11 — 平台首测与全量三模态候选（2026-09-12）
 
 ### 平台反馈
