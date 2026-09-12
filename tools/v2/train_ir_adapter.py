@@ -14,12 +14,15 @@ def main():
     p.add_argument('--epochs',type=int,default=20)
     p.add_argument('--fraction',type=float,default=1.0)
     p.add_argument('--batch',type=int,default=8)
+    p.add_argument('--base',default=BASE)
+    p.add_argument('--data',default=f'{ROOT}/data/s2_fullscale/data.yaml')
+    p.add_argument('--project',default='runs/s3')
     a=p.parse_args()
-    y=YOLO(BASE)
+    y=YOLO(a.base)
     y.model=attach_adapters(y.model,use_ir=True,use_depth=False)
     y.train(
         trainer=TriModalDetectionTrainer,
-        data=f'{ROOT}/data/s2_fullscale/data.yaml', project='runs/s3', name=a.name,
+        data=a.data, project=a.project, name=a.name,
         epochs=a.epochs, fraction=a.fraction, batch=a.batch, imgsz=1280, cache=False,
         device=0, workers=8, freeze=24, optimizer='AdamW', lr0=1e-3, lrf=0.05,
         cos_lr=True, warmup_epochs=2.0, momentum=0.937, weight_decay=5e-4,
