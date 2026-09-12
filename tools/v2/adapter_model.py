@@ -74,12 +74,20 @@ class AdapterDetectionModel(DetectionModel):
             d3 = z3 if d3 is None else d3 + z3
         return d2, d3
 
+    def _begin_residual_pass(self):
+        """Reset optional per-forward adapter state."""
+
+    def _apply_residual(self, anchor, residual, scale):
+        """Apply an auxiliary residual while preserving the legacy adapter behavior."""
+        return anchor + residual
+
     def _predict_once(self, x, profile=False, embed=None):
         if x.shape[1] == 3:  # stride/AMP probes and RGB-only smoke tests
             return super()._predict_once(x, profile, embed)
         if x.shape[1] != 6:
             raise ValueError(f"Adapter model expects 3 or 6 channels, got {x.shape[1]}")
         d2, d3 = self._aux_residuals(x)
+        self._begin_residual_pass()
         x = x[:, :3]
         y, dt, embeddings = [], [], []
         embed = frozenset(embed) if embed else {-1}
@@ -93,11 +101,11 @@ class AdapterDetectionModel(DetectionModel):
             if m.i == 2 and d2 is not None:
                 if x.shape != d2.shape:
                     raise RuntimeError(f"P2 mismatch: rgb={x.shape}, aux={d2.shape}")
-                x = x + d2
+                x = self._apply_residual(x, d2, "p2")
             elif m.i == 4 and d3 is not None:
                 if x.shape != d3.shape:
                     raise RuntimeError(f"P3 mismatch: rgb={x.shape}, aux={d3.shape}")
-                x = x + d3
+                x = self._apply_residual(x, d3, "p3")
             y.append(x if m.i in self.save else None)
             if m.i in embed:
                 embeddings.append(torch.nn.functional.adaptive_avg_pool2d(x, (1, 1)).squeeze(-1).squeeze(-1))
