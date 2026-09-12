@@ -11,6 +11,14 @@
 - 原始训练集：2000 组三模态数据；测试集：1000 组。
 - 大图 depth 为真实 uint16 毫米 PNG（0 表示无效）；少量小图 depth 为退化 uint8 JPEG；IR 三通道完全相同。
 
+## v2.0.17 — 公平推理链Adapter升至57.180；深度单变量续接（2026-09-12）
+
+- 平台反馈：`champion_da_ir_p23_soft_TTAEXACT_conf0.47.zip` = **57.1800**，超过原57.0240 **+0.1560**，成为新的合规单模型最佳；证明此前55.757主要受无TTA/FP16/缺二次NMS/IoU差异的推理链混淆，不能据此否定IR Adapter。
+- 新服务器12794：RTX 5090 32GB，Git HEAD `9e049f65`，57.024 Champion、57.180 IR Adapter及三模态候选权重均存在。
+- 下一单变量：从57.180对应IR checkpoint暖启动，只新增零初始化depth(value+valid) P2/P3残差，原Champion与IR Adapter全部冻结，只训练13个depth张量、175872参数；加入前恒等校验 `max_abs_diff=0.0`。保持IR训练的soft primary、1800/200、1280、弱增强、20 epoch、lr0=5e-4。
+- Run：`runs/detect/runs/s7/champion_ir_depthonly_p23`；日志：`runs/detect/runs/s7/logs/champion_ir_depthonly_p23.log`。训练完成后重载评测并用已验证的TTAEXACT链生成conf0.47平台包。若平台不超过57.180，立即回退并关闭depth；不做全量续训或seed扫。
+- depth结论后转独立检测器路线：公开预训练D-FINE先在现有soft三模态输入上跑匹配控制；只有单模型平台证据超过57.180才继续，不同时叠加门控、蒸馏、类别重权或多尺度。
+
 ## v2.0.16 — Champion推理链复现与Adapter公平A/B候选（2026-09-12）
 
 - 原Champion推理口径已从日志复现：`imgsz=1280`、full-image TTA、首层NMS IoU=0.6、二次class-wise fusion NMS IoU=0.55、max_det=100、FP32；重新生成 `submissions/repro_champion_exact_conf0.47.zip`，1000文件、5063框，与57.024历史包的记录一致，SHA256 `e2988a29c28ba59f981cf247b7d762b002b9858278e30e3d81eb93d452a0d703`。
