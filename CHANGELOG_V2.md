@@ -11,6 +11,13 @@
 - 原始训练集：2000 组三模态数据；测试集：1000 组。
 - 大图 depth 为真实 uint16 毫米 PNG（0 表示无效）；少量小图 depth 为退化 uint8 JPEG；IR 三通道完全相同。
 
+## v2.0.19 — IR阈值新高57.507；D-FINE-L首轮完成（2026-09-13）
+
+- 平台反馈：同一57.180 IR Adapter、同一TTAEXACT生产链下，`conf0.49` = **57.1960**（5045框），`conf0.45` = **57.5070**（5098框）；conf0.45成为新的合规单模型最佳，较conf0.47的57.180提升+0.327，较原RGB Champion 57.024提升+0.483，距60为2.493。
+- 已从完全相同的FP32原始预测缓存生成下一段嵌套阈值：conf0.44/0.43/0.42/0.40分别为5113/5130/5147/5175框；先提交0.44，若继续上涨再按0.43→0.42→0.40测试。所有包1000个根目录TXT并通过格式检查。
+- D-FINE-L soft1280控制完成36/36，训练耗时1:02:52；held-out COCO AP逐轮从epoch21的0.3758单调升至最终epoch35的**0.46164**，没有平台前停止或局部峰值证据。最终权重`D-FINE/output/aic_dfine_l_obj365_soft1280_b11/best_stg2.pth`，`last_epoch=35`。
+- 已用单一`best_stg2.pth`在1000张soft测试图推理并生成平台候选：主读`dfine_l_soft1280_b11_countmatch5098.zip`（5098框，SHA256 `838765591c8a722a3d1b49e3de8579142af8daf9320c9724894ee27fb0a616bd`）；低阈值完整读`conf0.3.zip`（6061框，SHA256 `4c2f4c46950873b62a8ac22ae9a1dc5628bea8f25af25784ddfda38de1da3ea6`）。均为单模型、单权重、单次推理。
+
 ## v2.0.18 — depth-only淘汰；D-FINE-L 1280正式训练（2026-09-12）
 
 - `s7/champion_ir_depthonly_p23`完成20/20。训练脚本虽将IR参数`requires_grad=False`，但IR Adapter的6个BN running buffers仍在train mode更新；恢复57.180 IR checkpoint全部671个共有state_dict张量后，depth-only保留22个depth tensors（19非零）。恢复版held-out soft-val200官方AP **64.2588**，低于IR-only **64.6190** 达 **−0.3602**；按预设止损淘汰，不生成平台包。后续真正冻结含BN buffer必须令对应模块保持eval。
