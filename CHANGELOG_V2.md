@@ -11,15 +11,15 @@
 - 原始训练集：2000 组三模态数据；测试集：1000 组。
 - 大图 depth 为真实 uint16 毫米 PNG（0 表示无效）；少量小图 depth 为退化 uint8 JPEG；IR 三通道完全相同。
 
-## v2.0.14 — 57.024 champion 的 IR-only 分布锚定 Adapter（完成，淘汰，2026-09-12）
+## v2.0.14 — 57.024 champion 的 IR-only 分布锚定 Adapter（候选，已出包，2026-09-12）
 
-- 证据：V2 的 IR Adapter 在 fold0、fold1 均相对匹配 RGB 基线为正，而额外 depth 在 fold1 下降且 v2.0.13 的 valid gate 无法稳定重载复现；因此本轮只移除不稳定的额外 depth residual。
-- 起点仍为平台 **57.0240** champion；soft 主输入已由 RGB/IR/depth 像素级融合生成，所以整体输入信息仍是三模态，新增 P2/P3 Adapter 仅使用更稳定的 IR 纠偏。
-- 分布锚定、数据划分、最新标签、增强、优化器和 20 epoch 预算均与 v2.0.13 相同；新增 `--adapter-modalities ir` 开关，训练前必须保持 `max_abs_diff=0.0`。
-- Run 计划：`runs/detect/runs/s5/champion_da_ir_p23`；以 ungated 双辅助分支重载约 0.650 为保留门槛。
-- 20/20 epoch 完整训练结束；逐轮峰值为 epoch 11 的 **0.65027**（mAP50 0.91873），略低于 ungated 双辅助分支的 0.65043。
-- `best.pt` 训练结束重载验证约 **0.646**，也低于 ungated 权重重载约 0.650；因此 IR-only 不晋级、不生成测试提交包。
-- 结论：soft champion 上单独增加 IR 纠偏不足；当前实验候选仍为 ungated RGB+IR+depth 分布锚定 `champion_da_trimodal_p23/weights/best.pt`，平台最佳仍为原 57.0240。
+- 起点为平台 **57.0240** champion；soft 主输入本身是 RGB/IR/depth 像素级融合，新增 P2/P3 Adapter 只使用跨 fold 更稳定的 IR 纠偏。20/20 epoch 完成，RGB 主体冻结，启动恒等校验 `max_abs_diff=0.0`。
+- Run：`runs/detect/runs/s5/champion_da_ir_p23`；逐轮内置峰值受训练/重载状态影响，不作为淘汰依据。
+- 修正评测口径：此前重载评测约 0.646 使用了错误的原始 RGB primary；本模型训练时 primary 是 `data/yolo_full2000_soft/val/images`。在同一 held-out 200、同一 1280/官方 101 点 AP、同一 soft primary 下重载三方复测：原 champion **63.9686**，ungated 双辅助 **63.8959**，IR-only **64.6190**。
+- IR-only 相对原 champion **+0.6504**，相对 ungated **+0.7231**；大图相对 champion +0.9029，小图 +0.0435。该方向通过本地保留门槛，但跨权重本地分与平台曾反相关，必须由平台 A/B 定夺。
+- 测试集同路径 soft primary、原始 IR/depth 辅助推理一次并缓存 top-100。候选一：`submissions/champion_da_ir_p23_soft_conf0.47.zip`，1000 文件、4791 框、SHA256 `b1c04e77aedb57f9984a662efa65a6d47ff5a31b247f90bc8b13a9eb444f5230`。
+- 候选二（首选，和 57.024 champion 的 5063 框严格 count-match）：阈值 0.287841796875，`submissions/champion_da_ir_p23_soft_countmatch5063_conf0.29.zip`，1000 文件、5063 框、SHA256 `c835765b1704ad45208c974571610890ec421ee1e61f022689fa734b243b8556`。
+- 当前平台最佳仍为 57.0240；只有平台分超过它才晋级。
 
 ## v2.0.13 — 57.024 champion 的 valid-aware 分布锚定 Adapter（完成，淘汰，2026-09-12）
 
