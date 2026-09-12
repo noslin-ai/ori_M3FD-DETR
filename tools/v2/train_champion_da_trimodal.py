@@ -39,6 +39,7 @@ def main():
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--align-weight", type=float, default=0.05)
+    parser.add_argument("--depth-valid-gate", action="store_true")
     parser.add_argument("--fraction", type=float, default=1.0)
     args = parser.parse_args()
 
@@ -47,6 +48,7 @@ def main():
     yolo.model = attach_distribution_aligned_adapters(
         yolo.model, align_weight=args.align_weight
     ).float().cuda().eval()
+    yolo.model.depth_valid_gate = args.depth_valid_gate
 
     probe = torch.rand(1, 6, 128, 128, device="cuda")
     with torch.inference_mode():
