@@ -11,6 +11,30 @@
 - 原始训练集：2000 组三模态数据；测试集：1000 组。
 - 大图 depth 为真实 uint16 毫米 PNG（0 表示无效）；少量小图 depth 为退化 uint8 JPEG；IR 三通道完全相同。
 
+## v2.0.5 — IR P2/P3 零残差 Adapter（运行中，2026-09-12）
+
+### 结构
+
+- 起点：`runs/detect/runs/s2/full1280_v2/weights/best.pt`。
+- RGB YOLO11m 主干、neck、Detect 全部冻结并保持原 checkpoint 对象结构。
+- IR 取单通道，经 32/64/128 通道轻量分支，在 layer 2（P2，stride 4）和 layer 4（P3，stride 8）注入零初始化 1×1 残差。
+- 新增 175,584 参数，占 RGB 基线 **0.875%**；单模型、单 checkpoint。
+- 在线读取 RGB/IR/depth，不生成六通道中间数据；RGB/IR/depth 共用 affine、flip、letterbox 几何参数。第一臂仅启用 IR，depth 通道暂不进入模型。
+
+### 训练前验收
+
+- 零初始化模型与 RGB checkpoint 前向 bit-exact：`max_abs_diff = 0.0`。
+- P2/P3 injection 首次 backward 梯度和均非零。
+- 1% 数据端到端 smoke 完成：六通道 Dataset → 同步增强 → 原生检测 loss → validator → checkpoint。
+- 正式训练 epoch 1 checkpoint：P2/P3 injection 权重已非零；所有 `model.*` RGB backbone/neck/head tensor 相对起点 `max_diff = 0`，确认 `freeze=24` 生效。
+
+### 正式运行
+
+- Run：`runs/detect/runs/s3/ir_adapter_p23_frozen`
+- 配置：folds5_v2/fold0、imgsz 1280、batch 8、20 epoch、AdamW lr0=1e-3、warmup 2、仅 Adapter 可训练。
+- 日志：`runs/detect/runs/s3/logs/ir_adapter_p23_frozen.log`
+- 停止判据：与固定 RGB-1280 基线做相同原图级官方指标；若无明确正收益，则不进入 depth/双 Adapter 和其余折。
+
 ## v2.0.4 — 全图 1280/1920 统一测评（2026-09-12）
 
 两个训练均完成 40 epoch：1280 的训练内 best mAP50–95 为 0.43421（epoch 40），1920 为 0.42145（epoch 38）。统一测评使用 `folds5_v2/fold0` 的全部 395 张原图、自研 101 点指标、每图最多 100 框；预测缓存于 `runs/detect/runs/s2/eval/`。
