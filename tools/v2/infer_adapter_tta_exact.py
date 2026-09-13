@@ -90,9 +90,9 @@ def box_iou_one_to_many(box, boxes):
     return intersection / np.maximum(area + areas - intersection, 1e-9)
 
 
-def second_classwise_nms(detections, iou_threshold=0.55, max_det=100):
+def second_classwise_nms_indices(detections, iou_threshold=0.55, max_det=100):
     if len(detections) == 0:
-        return detections
+        return np.empty(0, dtype=np.int64)
     boxes = detections[:, :4]
     scores = detections[:, 4]
     classes = detections[:, 5].astype(np.int64)
@@ -109,7 +109,7 @@ def second_classwise_nms(detections, iou_threshold=0.55, max_det=100):
             order = order[1:][overlap <= iou_threshold]
     keep = np.asarray(keep, dtype=np.int64)
     keep = keep[np.argsort(-scores[keep])[:max_det]]
-    return detections[keep]
+    return keep
 
 
 def infer(weights: str, cache_path: Path, primary_dir: Path, limit: int = 0):
@@ -138,8 +138,10 @@ def infer(weights: str, cache_path: Path, primary_dir: Path, limit: int = 0):
             detection = non_max_suppression(prediction, 0.001, 0.6, max_det=100)[0]
             if len(detection):
                 detection[:, :4] = ops.scale_boxes(tensor.shape[2:], detection[:, :4], original.shape)
-                detection = second_classwise_nms(detection.float().cpu().numpy(), 0.55, 100)
-                xywh = ops.xyxy2xywh(torch.from_numpy(detection[:, :4])).numpy()
+                keep = second_classwise_nms_indices(detection.float().cpu().numpy(), 0.55, 100)
+                detection = detection[torch.from_numpy(keep).to(detection.device)]
+                xywh = ops.xyxy2xywh(detection[:, :4]).float().cpu().numpy()
+                detection = detection.float().cpu().numpy()
                 xywh[:, [0, 2]] /= original.shape[1]
                 xywh[:, [1, 3]] /= original.shape[0]
                 output[stem] = [

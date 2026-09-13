@@ -21,6 +21,7 @@
 - 续训完整9/9轮，峰值epoch8 soft-val200 mAP50-95 **0.65155**，较57.507 IR起点约0.64619提升+0.00536；最终重载best约0.651。逐张量审计：与IR起点共有671个state_dict张量改变0个、`max_diff=0.0`，仅新增20个exchange tensors学习，P2/P3 project mean-abs分别0.00648/0.00696。
 - 新增`infer_adapter_tta_exact.py`，固定复用冠军生产口径：FP32、imgsz1280、full-image TTA、首层NMS IoU0.6、二次class-wise NMS IoU0.55、max_det100；先以旧IR权重抽样对照现有TTAEXACT文本，再为续训best生成conf0.45候选，避免再次混入推理链差异。
 - 首次旧权重10图抽样发现10/10不一致，审计定位为主图误读原始`data/test/visible`；冠军链实际主读`data/test_trimodal_soft/visible`，辅助IR/depth仍读`data/test`。候选推理未启动；脚本改为soft目录默认值并暴露`--primary-dir`，修正后必须重新通过旧权重逐字节抽样复现。
+- soft路径修正后旧权重抽样7/10逐字节一致，余下3图仅一个归一化坐标末位差`1e-6`，框/类别/置信度一致；来源是二次NMS后NumPy往返的额外舍入。改为二次NMS仅返回索引、坐标全程保留原Torch tensor，再做最终字节复现。
 
 ## v2.0.20 — D-FINE-L 60轮平台淘汰（2026-09-13）
 
