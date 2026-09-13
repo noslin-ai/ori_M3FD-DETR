@@ -23,6 +23,8 @@
 - 首次旧权重10图抽样发现10/10不一致，审计定位为主图误读原始`data/test/visible`；冠军链实际主读`data/test_trimodal_soft/visible`，辅助IR/depth仍读`data/test`。候选推理未启动；脚本改为soft目录默认值并暴露`--primary-dir`，修正后必须重新通过旧权重逐字节抽样复现。
 - soft路径修正后旧权重抽样7/10逐字节一致，余下3图仅一个归一化坐标末位差`1e-6`，框/类别/置信度一致；来源是二次NMS后NumPy往返的额外舍入。改为二次NMS仅返回索引、坐标全程保留原Torch tensor，再做最终字节复现。
 - 首次精度修复后末位差仍在，最终定位到归一化除法在NumPy端执行；改为xywh及宽高归一化全部在原Torch tensor完成后才转CPU，消除最后一次浮点运算顺序差异。
+- 最终以旧57.507 IR权重和现有TTAEXACT目录抽样复测，10/10 TXT逐字节一致，确认新脚本完整复现生产链。随后对续训epoch8 best一次性完成1000图推理并缓存。
+- 平台主候选：`submissions/champion_mage_exchange_p23_cont9_TTAEXACT_conf0.45.zip`，1000文件、5090框、SHA256 `9e499eda00b9a8ca661393c0bcba5cd53ac14b005d2d7d87a8a78b5877f23ce6`。相邻嵌套候选：conf0.44=5104框，SHA256 `703b266384eb899f1002a785836f29ef007c71a13d99dbabeb02d6c79620a339`；conf0.47=5062框，SHA256 `5b4f7e1fb2367bed9f277cd08af01107023aca224aaa7f58433a0b8268fc6982`。优先只提交conf0.45与57.507旧包做平台单变量A/B；平台未验证前不宣称晋级。
 
 ## v2.0.20 — D-FINE-L 60轮平台淘汰（2026-09-13）
 
