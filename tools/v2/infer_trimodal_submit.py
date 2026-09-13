@@ -3,6 +3,8 @@ import argparse,glob,json,math,os,shutil,sys,zipfile
 import cv2,numpy as np,torch
 R='/root/autodl-tmp/aic_race/M3F-DETR';sys.path.insert(0,f'{R}/tools/v2')
 import adapter_model
+import distribution_aligned_adapter  # noqa: F401 - checkpoint pickle dependency
+import mage_exchange_adapter  # noqa: F401 - checkpoint pickle dependency
 from ultralytics import YOLO
 from ultralytics.data.augment import LetterBox
 from ultralytics.utils import ops
