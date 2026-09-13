@@ -140,10 +140,11 @@ def infer(weights: str, cache_path: Path, primary_dir: Path, limit: int = 0):
                 detection[:, :4] = ops.scale_boxes(tensor.shape[2:], detection[:, :4], original.shape)
                 keep = second_classwise_nms_indices(detection.float().cpu().numpy(), 0.55, 100)
                 detection = detection[torch.from_numpy(keep).to(detection.device)]
-                xywh = ops.xyxy2xywh(detection[:, :4]).float().cpu().numpy()
-                detection = detection.float().cpu().numpy()
+                xywh = ops.xyxy2xywh(detection[:, :4]).float()
                 xywh[:, [0, 2]] /= original.shape[1]
                 xywh[:, [1, 3]] /= original.shape[0]
+                xywh = xywh.cpu().numpy()
+                detection = detection.float().cpu().numpy()
                 output[stem] = [
                     (int(detection[row, 5]), *[float(v) for v in xywh[row]], float(detection[row, 4]))
                     for row in range(len(detection))
