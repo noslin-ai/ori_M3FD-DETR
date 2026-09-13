@@ -65,6 +65,8 @@ def main():
     parser.add_argument("--epochs", type=int, default=24)
     parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--align-weight", type=float, default=0.02)
+    parser.add_argument("--lr0", type=float, default=3e-4)
+    parser.add_argument("--patience", type=int, default=999)
     args = parser.parse_args()
 
     reference = YOLO(args.base).model.float().cuda().eval()
@@ -98,7 +100,7 @@ def main():
         workers=8,
         freeze=24,
         optimizer="AdamW",
-        lr0=3e-4,
+        lr0=args.lr0,
         lrf=0.05,
         cos_lr=True,
         warmup_epochs=2.0,
@@ -106,7 +108,7 @@ def main():
         weight_decay=5e-4,
         seed=46,
         deterministic=True,
-        patience=8,
+        patience=args.patience,
         amp=True,
         plots=False,
         hsv_h=0.002,

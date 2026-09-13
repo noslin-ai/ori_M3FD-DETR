@@ -17,6 +17,7 @@
 - 结合CVPR 2026 Tri-Modal Fusion Transformers的MAGE/CSSA思路，在P2/P3新增联合通道门控、空间门控及depthwise局部细化；soft主输入继续承载RGB/IR/depth信息，辅助分支沿用已获平台正收益的IR，不重新启用本地与平台证据均不支持的直接depth残差。
 - 新模块输出投影全零初始化，训练前必须通过与57.507权重逐输出严格恒等的`max_diff=0.0`检查。旧YOLO与旧IR Adapter参数全部冻结，并显式锁定其BN running buffers为eval，修复v2.0.18暴露的“参数冻结但BN漂移”问题。
 - 仅训练新增`exchange_refiners`，1280、batch8、24 epoch、AdamW、`lr0=3e-4`、alignment weight 0.02、弱几何/光度增强、patience 8；计划run为`runs/detect/runs/s8/champion_mage_exchange_p23`。代码先提交推送，服务器拉取同一commit后才启动训练。
+- 首段因`patience=8`在epoch15提前结束；重载best来自epoch7，soft-val200 mAP50-95约**0.651**，高于57.507 IR起点约0.64619。为遵守完整训练要求并保留首段最佳，训练脚本新增`--lr0/--patience`参数且默认`patience=999`；从首段best另建`champion_mage_exchange_p23_cont9`，以`lr0=1e-4`低学习率续训9轮，不覆盖首段产物。
 
 ## v2.0.20 — D-FINE-L 60轮平台淘汰（2026-09-13）
 
