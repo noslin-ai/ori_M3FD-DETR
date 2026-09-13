@@ -18,6 +18,8 @@
 - 新模块输出投影全零初始化，训练前必须通过与57.507权重逐输出严格恒等的`max_diff=0.0`检查。旧YOLO与旧IR Adapter参数全部冻结，并显式锁定其BN running buffers为eval，修复v2.0.18暴露的“参数冻结但BN漂移”问题。
 - 仅训练新增`exchange_refiners`，1280、batch8、24 epoch、AdamW、`lr0=3e-4`、alignment weight 0.02、弱几何/光度增强、patience 8；计划run为`runs/detect/runs/s8/champion_mage_exchange_p23`。代码先提交推送，服务器拉取同一commit后才启动训练。
 - 首段因`patience=8`在epoch15提前结束；重载best来自epoch7，soft-val200 mAP50-95约**0.651**，高于57.507 IR起点约0.64619。为遵守完整训练要求并保留首段最佳，训练脚本新增`--lr0/--patience`参数且默认`patience=999`；从首段best另建`champion_mage_exchange_p23_cont9`，以`lr0=1e-4`低学习率续训9轮，不覆盖首段产物。
+- 续训完整9/9轮，峰值epoch8 soft-val200 mAP50-95 **0.65155**，较57.507 IR起点约0.64619提升+0.00536；最终重载best约0.651。逐张量审计：与IR起点共有671个state_dict张量改变0个、`max_diff=0.0`，仅新增20个exchange tensors学习，P2/P3 project mean-abs分别0.00648/0.00696。
+- 新增`infer_adapter_tta_exact.py`，固定复用冠军生产口径：FP32、imgsz1280、full-image TTA、首层NMS IoU0.6、二次class-wise NMS IoU0.55、max_det100；先以旧IR权重抽样对照现有TTAEXACT文本，再为续训best生成conf0.45候选，避免再次混入推理链差异。
 
 ## v2.0.20 — D-FINE-L 60轮平台淘汰（2026-09-13）
 
