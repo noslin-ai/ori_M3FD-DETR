@@ -112,8 +112,8 @@ def second_classwise_nms(detections, iou_threshold=0.55, max_det=100):
     return detections[keep]
 
 
-def infer(weights: str, cache_path: Path, limit: int = 0):
-    visible = path_map(ROOT / "data/test/visible")
+def infer(weights: str, cache_path: Path, primary_dir: Path, limit: int = 0):
+    visible = path_map(primary_dir)
     infrared = path_map(ROOT / "data/test/infrared")
     depth = path_map(ROOT / "data/test/depth")
     stems = sorted(visible)
@@ -188,9 +188,19 @@ def main():
     parser.add_argument("--cache", required=True, type=Path)
     parser.add_argument("--prefix", required=True)
     parser.add_argument("--thresholds", nargs="+", type=float, default=[0.45])
+    parser.add_argument(
+        "--primary-dir",
+        type=Path,
+        default=ROOT / "data/test_trimodal_soft/visible",
+        help="Soft-fused primary images used by the 57.507 champion pipeline",
+    )
     parser.add_argument("--limit", type=int, default=0)
     args = parser.parse_args()
-    raw = json.load(args.cache.open()) if args.cache.exists() else infer(args.weights, args.cache, args.limit)
+    raw = (
+        json.load(args.cache.open())
+        if args.cache.exists()
+        else infer(args.weights, args.cache, args.primary_dir, args.limit)
+    )
     for threshold in args.thresholds:
         suffix = f"conf{threshold:.2f}"
         emit(raw, threshold, ROOT / "submissions" / f"{args.prefix}_{suffix}", ROOT / "submissions" / f"{args.prefix}_{suffix}.zip")
