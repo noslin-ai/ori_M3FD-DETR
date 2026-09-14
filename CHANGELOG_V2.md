@@ -4,12 +4,44 @@
 
 ## 项目基线与硬约束
 
-- 当前已知合规平台最佳：**57.5070**；目标：**60+**。
+- 当前已知合规平台最佳：**57.5210**；目标：**60+**。
 - 平台指标：12 类等权 COCO mAP@50–95（101 点插值）。
 - 最终方案必须是单模型、单权重、单次可复现推理；禁止模型框级融合。
 - 测试集仅用于最终推理，严禁伪标签训练或任何形式的测试集训练。
 - 原始训练集：2000 组三模态数据；测试集：1000 组。
 - 大图 depth 为真实 uint16 毫米 PNG（0 表示无效）；少量小图 depth 为退化 uint8 JPEG；IR 三通道完全相同。
+
+## v2.0.27 — 稀有类分类塔微调完成并平台淘汰（2026-09-14）
+
+- 全量2000张标签审计确认稀缺/域偏移：tricycle 27实例；ball 95实例且82.1%为小目标；boat 135实例；uav 208实例且93.3%来自退化JPEG depth域；garbage can 282实例。审计产物位于`artifacts/rare_class_audit/`。
+- 在v2.0.24配置基础上完成5090冒烟：batch8完整通过且约63秒/轮；batch16完整通过但约71秒/轮，吞吐反而下降；batch24在第49/75步无Python/cgroup OOM日志退出，batch32在首个batch前无日志退出，因此正式选择实测稳定且更快的batch8。
+- 正式run：`runs/detect/runs/s11/champion_rarity_head_ft_b8_10ep`；1280、AMP、batch8、workers8、AdamW `lr0=5e-5`、固定10 epoch。10/10完成，10次`RARITY_EPOCH_FREEZE_AUDIT`均`checked=630 changed=0`；`last.pt`重载为`RarityHeadFinetuneModel stage=11`，与冠军共有的629项非cv3状态改变0。
+- 唯一平台包：`submissions/rarity_head_last_TTAEXACT_conf0.46.zip`，1000文件、5085框，SHA256 `15409fac4c3bddb279058572050b8c7acba5305019527dc6f70dc3aed8ecbace`。它与57.521冠军在相同conf0.46下框数完全相同，因此是无阈值/框数混淆的权重A/B。
+- 平台结果仅 **56.4720**，低于冠军 **1.0490**。结论：有上限的类均衡BCE仍会让既有分类边界退化；该路线淘汰，不提交`best.pt`、不扫阈值/类别权重、不继续训练。
+
+## v2.0.26 — 冠军锚定三流交叉注意力完成并平台淘汰（2026-09-14）
+
+- 完成P2/P3/P4三流跨模态注意力：主输入保持冠军soft primary，显式辅助输入为IR、depth、valid mask和PNG/JPEG domain；新模块1,547,264参数，总参数21,785,108。新增融合为零残差，初始化对真实冠军single/full-TTA均`max_diff=0.0`。
+- 修复domain编码为0/255后统一归一化；TTA中primary+IR保持冠军操作，depth/valid改用nearest与zero padding、domain保持常量；修复invalid depth query的attention泄漏、resume阶段初始化、Stage2 DFL固定bin排除和neck/head 0.1倍学习率。
+- CPU验证：`unittest discover -s tests -v`共27项、149.062秒全部通过；真实PNG/JPEG七通道样本、检测loss/backward、P2/P3/P4梯度、671项冠军状态冻结、保存重载和2轮CPU stop/resume均通过。日志与SHA清单位于`artifacts/xmodal_cpu_verification/`。
+- GPU Stage1正式run：`runs/detect/runs/s10/xmodal_stage1_b8_18ep`，1280、AMP、batch8、18 epoch；训练退出码0，18行results连续，18次冻结审计改变0，完成清单为`TRAIN_DONE_VERIFIED`。成功验证后自动关机链正常触发；`last.pt` SHA256 `9bcf77f7eb9f8284859e620ef6bb77ade9ad26292bedaf143311c90e636d3a16`。
+- 平台结果：`xmodal_s1_last_TTAEXACT_conf0.46.zip` **57.4140**（5059框，−0.1070）；`xmodal_s1_last_TTAEXACT_count5085.zip` **57.3620**（−0.1590）。冻结冠军上的交叉注意力未带来增益；按止损规则关闭路线，不跑Stage2、不提交本地best、不扫阈值。
+
+## v2.0.25 — Depth Reliability修复、训练与平台结论（2026-09-13）
+
+- 第一版Depth Reliability因alignment loss未关闭、JPEG depth错误取channel 0、optimizer混入冻结参数、冻结审计过晚而中止并隔离，绝不用于候选。
+- v2严格修复：`align_weight=0`；uint16 PNG走度量深度，uint8 JPEG显式灰度解码；optimizer仅含7个depth-gate张量/212,672参数；每轮审计冠军671项参数和buffers；加入valid-aware有界调制及保守域特定噪声/dropout。
+- 正式run：`runs/detect/runs/s9/champion_ir_depth_reliability_aug`，20/20 epoch完成。中途一次外部SIGKILL后从有效epoch3 checkpoint原位恢复；最终671项冠军状态全部未变。本地最高mAP50-95 0.65112，冠军本地最高0.65154。
+- 平台结果：`depthrel_last_TTAEXACT_count5085.zip` **57.4590**（−0.0620）；`depthrel_last_TTAEXACT_conf0.46.zip` **57.4930**（−0.0280）。均未超过57.521，路线淘汰，不做全量重训或继续阈值扫描。
+- IR阈值收口补录：`champion_da_ir_p23_soft_TTAEXACT_conf0.465.zip`平台 **57.1690**，低于conf0.46峰值0.3520；停止千分位阈值微调，锁定conf0.46的57.5210。
+
+## v2.0.24 — 冠军锚定稀有类分类塔微调CPU配置（2026-09-14）
+
+- 锚定平台57.521的`runs/detect/runs/s5/champion_da_ir_p23/weights/best.pt`，保留checkpoint对象、原Detect结构及IR Adapter；不新增检测头、不改backbone/neck、不使用test训练、不继续已失败的三流交叉注意力Stage2。
+- 新增独立s11分类头微调实现：仅白名单化现有`Detect.cv3`的42个张量/559,140参数；回归`cv2`、DFL、其余671共享state中的非cv3状态及109个BN buffers冻结，optimizer参数id集合严格等于白名单，每epoch同时审计model与冻结EMA状态。
+- 从全部2000份官方train标签固化类别权重manifest：`sqrt(median/count)`先clip到`[0.75,2.5]`再均值归一；tricycle与ball均在上限，不允许稀有类权重无限放大。Ultralytics 8.4.131原生BCE广播经源码与功能测试确认是`(1,1,12)`乘`(bs,anchors,12)`，仅改变cls项，box/DFL逐位不变。
+- 严格TDD完成9项unittest；真实train样本`00000004`在1280下single/full-TTA对冠军与初始化artifact均为`max_diff=0.0`。初始化保留671/671冠军state、改变0；产物及日志位于`artifacts/s11_rarity_head/`，说明见`RARITY_HEAD_FINETUNE.md`。
+- GPU计划仅配置未运行：1280、AMP、初始batch8、workers8、最多10 epoch、AdamW `lr0=5e-5`，固定预算只取`last.pt`。当前无`/dev/nvidiactl`且`nvidia-smi` Permission denied；launcher已验证拒绝训练。未来首个且唯一候选为exact-TTA conf0.46，平台不超过57.521即关闭该路线。
 
 ## v2.0.23 — IR conf0.46刷新合规单模型最佳（2026-09-13）
 
